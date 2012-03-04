@@ -290,6 +290,11 @@ Dygraph.DEFAULT_ATTRS = {
 Dygraph.HORIZONTAL = 1;
 Dygraph.VERTICAL = 2;
 
+// Installed plugins, in order of precedence (most-general to most-specific).
+// Plugins are installed after they are defined, in plugins/install.js.
+Dygraph.PLUGINS = [
+];
+
 // Used for initializing annotation CSS rules only once.
 Dygraph.addedAnnotationCSS = false;
 
@@ -407,7 +412,87 @@ Dygraph.prototype.__init__ = function(div, file, attrs) {
   // Create the containing DIV and other interactive elements
   this.createInterface_();
 
+  // Activate plugins.
+  this.plugins_ = [];
+  for (var i = 0; i < Dygraph.PLUGINS.length; i++) {
+    var plugin = Dygraph.PLUGINS[i];
+    var pluginInstance = new plugin();
+    var pluginDict = {
+      plugin: pluginInstance,
+      events: {},
+      options: {},
+      pluginOptions: {}
+    };
+
+    console.log('Activating ' + pluginInstance.toString());
+    var registerer = (function(pluginDict) {
+      return {
+        addEventListener: function(eventName, callback) {
+          // TODO(danvk): validate eventName.
+          pluginDict.events[eventName] = callback;
+        }
+      };
+    })(pluginDict);
+    pluginInstance.activate(this, registerer);
+    // TODO(danvk): prevent activate() from holding a reference to registerer.
+
+    this.plugins_.push(pluginDict);
+  }
+
+  // At this point, plugins can no longer register event handlers.
+  // Construct a map from event -> ordered list of [callbac, plugin].
+  this.eventListeners_ = {};
+  for (var i = 0; i < this.plugins_.length; i++) {
+    var plugin_dict = this.plugins_[i];
+    for (var eventName in plugin_dict.events) {
+      if (!plugin_dict.events.hasOwnProperty(eventName)) continue;
+      var callback = plugin_dict.events[eventName];
+
+      var pair = [plugin_dict.plugin, callback];
+      if (!(eventName in this.eventListeners_)) {
+        this.eventListeners_[eventName] = [pair];
+      } else {
+        this.eventListeners_[eventName].push(pair);
+      }
+    }
+  }
+
   this.start_();
+};
+
+/**
+ * Triggers a cascade of events to the various plugins which are interested in them.
+ * Returns true if the "default behavior" should be performed, i.e. if none of
+ * the event listeners called event.preventDefault().
+ * @private
+ */
+Dygraph.prototype.cascadeEvents_ = function(name, extra_props) {
+  if (!name in this.eventListeners_) return true;
+
+  // QUESTION: can we use objects & prototypes to speed this up?
+  var e = {
+    dygraph: this,
+    cancelable: false,
+    defaultPrevented: false,
+    preventDefault: function() {
+      if (!e.cancelable) throw "Cannot call preventDefault on non-cancelable event.";
+      e.defaultPrevented = true;
+    },
+    propagationStopped: false,
+    stopPropagation: function() {
+      propagationStopped = true;
+    }
+  };
+  Dygraph.update(e, extra_props);
+
+  var callback_plugin_pairs = this.eventListeners_[name];
+  for (var i = callback_plugin_pairs.length - 1; i >= 0; i--) {
+    var plugin = callback_plugin_pairs[i][0];
+    var callback = callback_plugin_pairs[i][1];
+    callback.call(plugin, e);
+    if (e.propagationStopped) break;
+  }
+  return e.defaultPrevented;
 };
 
 /**
@@ -482,6 +567,13 @@ Dygraph.prototype.attr_ = function(name, seriesName) {
     }
   }
   return ret;
+};
+
+/**
+ * TODO(danvk): document
+ */
+Dygraph.prototype.getOption = function(name, opt_seriesName) {
+  return this.attr_(name, opt_seriesName);
 };
 
 /**
@@ -1028,7 +1120,7 @@ Dygraph.prototype.createStatusMessage_ = function() {
         }
       }
     }
-    this.graphDiv.appendChild(div);
+    // this.graphDiv.appendChild(div);
     this.attrs_.labelsDiv = div;
   }
 };
@@ -1896,6 +1988,11 @@ Dygraph.prototype.animateSelection_ = function(direction) {
  * @private
  */
 Dygraph.prototype.updateSelection_ = function(opt_animFraction) {
+  var defaultPrevented = this.cascadeEvents_('select', {
+    selectedX: this.lastx_,
+    selectedPoints: this.selPoints_
+  });
+
   // Clear the previously drawn vertical, if there is one
   var i;
   var ctx = this.canvas_ctx_;
@@ -1940,6 +2037,7 @@ Dygraph.prototype.updateSelection_ = function(opt_animFraction) {
   if (this.selPoints_.length > 0) {
     // Set the status message to indicate the selected point(s)
     if (this.attr_('showLabelsOnHighlight')) {
+      // TODO(danvk): synthesize event here.
       this.setLegendHTML_(this.lastx_, this.selPoints_);
     }
 
@@ -2045,6 +2143,8 @@ Dygraph.prototype.mouseOut_ = function(event) {
  * the mouse over the chart).
  */
 Dygraph.prototype.clearSelection = function() {
+  this.cascadeEvents_('deselect', {});
+
   // Get rid of the overlay data
   if (this.fadeLevel) {
     this.animateSelection_(-1);
