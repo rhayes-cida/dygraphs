@@ -412,19 +412,24 @@ Dygraph.prototype.__init__ = function(div, file, attrs) {
   // Create the containing DIV and other interactive elements
   this.createInterface_();
 
-  // Activate plugins.
+  this.activatePlugins_();
+
+  this.start_();
+};
+
+Dygraph.prototype.activatePlugins_ = function() {
+  // Instantiate & activate all the plugins. Keep track of event listeners.
   this.plugins_ = [];
   for (var i = 0; i < Dygraph.PLUGINS.length; i++) {
     var plugin = Dygraph.PLUGINS[i];
     var pluginInstance = new plugin();
     var pluginDict = {
       plugin: pluginInstance,
-      events: {},
-      options: {},
-      pluginOptions: {}
+      events: {},  // eventName -> callback mapping
+      options: {},  // each plugin has its own attr_ dictionary.
+      pluginOptions: {}  // this plugin's own user-visible options
     };
 
-    console.log('Activating ' + pluginInstance.toString());
     var registerer = (function(pluginDict) {
       return {
         addEventListener: function(eventName, callback) {
@@ -456,8 +461,6 @@ Dygraph.prototype.__init__ = function(div, file, attrs) {
       }
     }
   }
-
-  this.start_();
 };
 
 /**

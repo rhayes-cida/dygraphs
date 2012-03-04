@@ -11,14 +11,23 @@ legend.prototype.toString = function() {
 };
 
 legend.prototype.activate = function(g, r) {
+  r.addEventListener('layout', legend.layout);
+  r.addEventListener('select', legend.select);
+  r.addEventListener('deselect', legend.deselect);
+};
+
+legend.layout = function(e) {
+  var g = e.dygraph;
+  var chart_area = e.chartRect();
+
   var divWidth = g.getOption('labelsDivWidth');
   var messagestyle = {
     "position": "absolute",
     "fontSize": "14px",
     "zIndex": 10,
     "width": divWidth + "px",
-    "top": "0px",
-    "right": "2px",
+    "top": chart_area.y + "px",
+    "left": (chart_area.x + chart_area.w - divWidth - 2) + "px",
     "background": "white",
     "textAlign": "left",
     "overflow": "hidden"};
@@ -41,9 +50,6 @@ legend.prototype.activate = function(g, r) {
   this.legend_div_ = div;
   // TODO(danvk): come up with a cleaner way to expose this.
   g.graphDiv.appendChild(div);
-
-  r.addEventListener('select', legend.select);
-  r.addEventListener('deselect', legend.deselect);
 };
 
 legend.select = function(e) {
