@@ -261,6 +261,14 @@ Dygraph.DEFAULT_ATTRS = {
   rangeSelectorPlotStrokeColor: "#808FAB",
   rangeSelectorPlotFillColor: "#A7B1C4",
 
+  // The ordering here ensures that central lines always appear above any
+  // fill bars/error bars.
+  plotter: [
+    DygraphCanvasRenderer.Plotters.fillPlotter,
+    DygraphCanvasRenderer.Plotters.errorPlotter,
+    DygraphCanvasRenderer.Plotters.linePlotter
+  ],
+
   // per-axis options
   axes: {
     x: {
@@ -1853,8 +1861,9 @@ Dygraph.prototype.updateSelection_ = function(opt_animFraction) {
       ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
       ctx.fillRect(0, 0, this.width_, this.height_);
     }
-    var setIdx = this.datasetIndexFromSetName_(this.highlightSet_);
-    this.plotter_._drawLine(ctx, setIdx);
+    // var setIdx = this.datasetIndexFromSetName_(this.highlightSet_);
+    // this.plotter_._drawLine(ctx, setIdx);
+    this.plotter_._renderLineChart(this.highlightSet_);
   } else if (this.previousVerticalX_ >= 0) {
     // Determine the maximum highlight circle size.
     var maxCircleSize = 0;

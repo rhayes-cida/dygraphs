@@ -152,6 +152,10 @@ DygraphCanvasRenderer.isSupported = function(canvasName) {
  * @private
  */
 DygraphCanvasRenderer.prototype.render = function() {
+  // attaches point.canvas{x,y}
+  this._updatePoints();
+
+  // actually draws the chart.
   this._renderLineChart();
 };
 
@@ -244,22 +248,24 @@ DygraphCanvasRenderer._predicateThatSkipsEmptyPoints =
 
 /**
  *
+ * TODO(danvk): rename this function
  * @private
  */
-DygraphCanvasRenderer.prototype._drawStyledLine = function(
-    ctx, setIdx, setName, color, strokeWidth, strokePattern, drawPoints,
+DygraphCanvasRenderer._drawStyledLine = function(e,
+    ctx, points, setName, color, strokeWidth, strokePattern, drawPoints,
     drawPointCallback, pointSize) {
+  var g = e.dygraph;
   // TODO(konigsberg): Compute attributes outside this method call.
-  var stepPlot = this.attr_("stepPlot");
+  var stepPlot = g.getOption("stepPlot");  // TODO(danvk): per-series
   if (!Dygraph.isArrayLike(strokePattern)) {
     strokePattern = null;
   }
-  var drawGapPoints = this.dygraph_.attr_('drawGapEdgePoints', setName);
+  var drawGapPoints = g.getOption('drawGapEdgePoints', setName);
 
-  var points = this.layout.points[setIdx];
+  var points = e.points;
   var iter = Dygraph.createIterator(points, 0, points.length,
       DygraphCanvasRenderer._getIteratorPredicate(
-          this.attr_("connectSeparatedPoints")));
+          g.getOption("connectSeparatedPoints")));  // TODO(danvk): per-series?
 
   var stroking = strokePattern && (strokePattern.length >= 2);
 
@@ -268,8 +274,8 @@ DygraphCanvasRenderer.prototype._drawStyledLine = function(
     ctx.installPattern(strokePattern);
   }
 
-  var pointsOnLine = this._drawSeries(ctx, iter, strokeWidth, pointSize, drawPoints, drawGapPoints, stepPlot, color);
-  this._drawPointsOnLine(ctx, pointsOnLine, drawPointCallback, setName, color, pointSize);
+  var pointsOnLine = DygraphCanvasRenderer._drawSeries(e, ctx, iter, strokeWidth, pointSize, drawPoints, drawGapPoints, stepPlot, color);
+  DygraphCanvasRenderer._drawPointsOnLine(e, ctx, pointsOnLine, drawPointCallback, setName, color, pointSize);
 
   if (stroking) {
     ctx.uninstallPattern();
@@ -278,17 +284,27 @@ DygraphCanvasRenderer.prototype._drawStyledLine = function(
   ctx.restore();
 };
 
-DygraphCanvasRenderer.prototype._drawPointsOnLine = function(ctx, pointsOnLine, drawPointCallback, setName, color, pointSize) {
+/**
+ * This fires the drawPointCallback functions, which draw dots on the points by
+ * default. This gets used when the "drawPoints" option is set, or when there
+ * are isolated points.
+ * @private
+ */
+DygraphCanvasRenderer._drawPointsOnLine = function(e, ctx, pointsOnLine, drawPointCallback, setName, color, pointSize) {
   for (var idx = 0; idx < pointsOnLine.length; idx++) {
     var cb = pointsOnLine[idx];
     ctx.save();
     drawPointCallback(
-        this.dygraph_, setName, ctx, cb[0], cb[1], color, pointSize);
+        e.dygraph, setName, ctx, cb[0], cb[1], color, pointSize);
     ctx.restore();
   }
 }
 
-DygraphCanvasRenderer.prototype._drawSeries = function(
+/**
+ * This does the actual drawing of lines on the canvas, for just one series.
+ * @private
+ */
+DygraphCanvasRenderer._drawSeries = function(e,
     ctx, iter, strokeWidth, pointSize, drawPoints, drawGapPoints,
     stepPlot, color) {
 
@@ -371,49 +387,11 @@ DygraphCanvasRenderer.prototype._drawSeries = function(
   return pointsOnLine;
 };
 
-DygraphCanvasRenderer.prototype._drawLine = function(ctx, i) {
-  var setNames = this.layout.setNames;
-  var setName = setNames[i];
-
-  var strokeWidth = this.dygraph_.attr_("strokeWidth", setName);
-  var borderWidth = this.dygraph_.attr_("strokeBorderWidth", setName);
-  var drawPointCallback = this.dygraph_.attr_("drawPointCallback", setName) ||
-      Dygraph.Circles.DEFAULT;
-
-  if (borderWidth && strokeWidth) {
-    this._drawStyledLine(ctx, i, setName,
-        this.dygraph_.attr_("strokeBorderColor", setName),
-        strokeWidth + 2 * borderWidth,
-        this.dygraph_.attr_("strokePattern", setName),
-        this.dygraph_.attr_("drawPoints", setName),
-        drawPointCallback,
-        this.dygraph_.attr_("pointSize", setName));
-  }
-
-  this._drawStyledLine(ctx, i, setName,
-      this.colors[setName],
-      strokeWidth,
-      this.dygraph_.attr_("strokePattern", setName),
-      this.dygraph_.attr_("drawPoints", setName),
-      drawPointCallback,
-      this.dygraph_.attr_("pointSize", setName));
-};
-
 /**
- * Actually draw the lines chart, including error bars.
+ * Attaches canvas coordinates to the points array.
  * @private
  */
-DygraphCanvasRenderer.prototype._renderLineChart = function() {
-  var ctx = this.elementContext;
-  var errorBars = this.attr_("errorBars") || this.attr_("customBars");
-  var fillGraph = this.attr_("fillGraph");
-  var i;
-
-  var setNames = this.layout.setNames;
-  var setCount = setNames.length;
-
-  this.colors = this.dygraph_.colorsMap_;
-
+DygraphCanvasRenderer.prototype._updatePoints = function() {
   // Update Points
   // TODO(danvk): here
   //
@@ -427,7 +405,7 @@ DygraphCanvasRenderer.prototype._renderLineChart = function() {
   // transformed coordinate space, but you can't specify different values for
   // each dimension (as you can with .scale()). The speedup here is ~12%.
   var sets = this.layout.points;
-  for (i = sets.length; i--;) {
+  for (var i = sets.length; i--;) {
     var points = sets[i];
     for (var j = points.length; j--;) {
       var point = points[j];
@@ -435,55 +413,148 @@ DygraphCanvasRenderer.prototype._renderLineChart = function() {
       point.canvasy = this.area.h * point.y + this.area.y;
     }
   }
-
-  // Draw any "fills", i.e. error bars or the filled area under a series.
-  // These must all be drawn before any lines, so that the main lines of a
-  // series are drawn on top.
-  if (errorBars) {
-    if (fillGraph) {
-      this.dygraph_.warn("Can't use fillGraph option with error bars");
-    }
-
-    ctx.save();
-    this.drawErrorBars_(points);
-    ctx.restore();
-  } else if (fillGraph) {
-    ctx.save();
-    this.drawFillBars_(points);
-    ctx.restore();
-  }
-
-  // Drawing the lines.
-  for (i = 0; i < setCount; i += 1) {
-    this._drawLine(ctx, i);
-  }
 };
 
 /**
- * Draws the shaded error bars/confidence intervals for each series.
- * This happens before the center lines are drawn, since the center lines
- * need to be drawn on top of the error bars for all series.
+ * Add canvas Actually draw the lines chart, including error bars.
+ * If opt_seriesName is specified, only that series will be drawn.
+ * (This is used for expedited redrawing with highlightSeriesOpts)
  *
+ * This function can only be called if DygraphLayout's points array has been
+ * updated with canvas{x,y} attributes, i.e. by
+ * DygraphCanvasRenderer._updatePoints.
  * @private
  */
-DygraphCanvasRenderer.prototype.drawErrorBars_ = function(points) {
+DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName) {
   var ctx = this.elementContext;
+  var errorBars = this.attr_("errorBars") || this.attr_("customBars");
+  var fillGraph = this.attr_("fillGraph");
+  var i;
+
+  var sets = this.layout.points;
   var setNames = this.layout.setNames;
   var setCount = setNames.length;
-  var fillAlpha = this.attr_('fillAlpha');
-  var stepPlot = this.attr_('stepPlot');
 
-  var newYs;
+  this.colors = this.dygraph_.colorsMap_;
 
-  for (var setIdx = 0; setIdx < setCount; setIdx++) {
-    var setName = setNames[setIdx];
-    var axis = this.dygraph_.axisPropertiesForSeries(setName);
-    var color = this.colors[setName];
+  // Determine which series have specialized plotters.
+  var plotter_attr = this.attr_("plotter");
+  var plotters = plotter_attr;
+  if (!Dygraph.isArrayLike(plotters)) {
+    plotters = [plotters];
+  }
 
-    var points = this.layout.points[setIdx];
+  var setPlotters = {};  // series name -> plotter fn.
+  for (i = 0; i < setNames.length; i++) {
+    var setName = setNames[i];
+    var setPlotter = this.attr_("plotter", setName);
+    if (setPlotter == plotter_attr) continue;  // not specialized.
+
+    setPlotter[setName] = setPlotter;
+  }
+
+  for (i = 0; i < plotters.length; i++) {
+    var plotter = plotters[i];
+    var is_last = (i == plotters.length - 1);
+
+    for (var j = 0; j < sets.length; j++) {
+      var setName = setNames[j];
+      if (opt_seriesName && setName != opt_seriesName) continue;
+
+      var points = sets[j];
+
+      // Only throw in the specialized plotters on the last iteration.
+      var p = plotter;
+      if (setName in setPlotters) {
+        if (is_last) {
+          p = setPlotters[setName];
+        } else {
+          // Don't use the standard plotters in this case.
+          continue;
+        }
+      }
+
+      ctx.save();
+      p({
+        points: points,
+        setName: setName,
+        drawingContext: this.elementContext,
+        color: this.colors[setName],
+        dygraph: this.dygraph_,
+        axis: this.dygraph_.axisPropertiesForSeries(setName),
+        plotArea: this.area
+      });
+      ctx.restore();
+    }
+  }
+};
+
+DygraphCanvasRenderer.Plotters = {
+  linePlotter: function(e) {
+    var g = e.dygraph;
+    var setName = e.setName;
+    var ctx = e.drawingContext;
+    var color = e.color;
+
+    var strokeWidth = g.getOption("strokeWidth", setName);
+    var borderWidth = g.getOption("strokeBorderWidth", setName);
+    var drawPointCallback = g.getOption("drawPointCallback", setName) ||
+        Dygraph.Circles.DEFAULT;
+    var strokePattern = g.getOption("strokePattern", setName);
+    var drawPoints = g.getOption("drawPoints", setName);
+    var pointSize = g.getOption("pointSize", setName);
+
+    if (borderWidth && strokeWidth) {
+      DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
+          g.getOption("strokeBorderColor", setName),
+          strokeWidth + 2 * borderWidth,
+          strokePattern, drawPoints, drawPointCallback, pointSize
+          );
+    }
+
+    // TODO(danvk): reduce the number of arguments to this fn by passing in e.
+    DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
+        color,
+        strokeWidth,
+        strokePattern,
+        drawPoints,
+        drawPointCallback,
+        pointSize
+    );
+  },
+
+  fillPlotter: function(e) {
+    // TODO(danvk): implement
+  },
+
+  /**
+   * Draws the shaded error bars/confidence intervals for each series.
+   * This happens before the center lines are drawn, since the center lines
+   * need to be drawn on top of the error bars for all series.
+   */
+  errorPlotter: function(e) {
+    var g = e.dygraph;
+    var errorBars = g.getOption("errorBars") || g.getOption("customBars");
+    if (!errorBars) return;
+
+    var fillGraph = g.getOption("fillGraph");
+    if (fillGraph) {
+      g.warn("Can't use fillGraph option with error bars");
+    }
+
+    var setName = e.setName;
+    var ctx = e.drawingContext;
+    var color = e.color;
+    var fillAlpha = g.getOption('fillAlpha', setName);
+    var stepPlot = g.getOption('stepPlot');  // TODO(danvk): per-series
+    var axis = e.axis;
+    var points = e.points;
+
     var iter = Dygraph.createIterator(points, 0, points.length,
         DygraphCanvasRenderer._getIteratorPredicate(
-            this.attr_("connectSeparatedPoints")));
+            g.getOption("connectSeparatedPoints")));
+
+    var newYs;
 
     // setup graphics context
     var prevX = NaN;
@@ -509,8 +580,8 @@ DygraphCanvasRenderer.prototype.drawErrorBars_ = function(points) {
       } else {
         newYs = [ point.y_bottom, point.y_top ];
       }
-      newYs[0] = this.area.h * newYs[0] + this.area.y;
-      newYs[1] = this.area.h * newYs[1] + this.area.y;
+      newYs[0] = e.plotArea.h * newYs[0] + e.plotArea.y;
+      newYs[1] = e.plotArea.h * newYs[1] + e.plotArea.y;
       if (!isNaN(prevX)) {
         if (stepPlot) {
           ctx.moveTo(prevX, newYs[0]);
@@ -636,3 +707,16 @@ DygraphCanvasRenderer.prototype.drawFillBars_ = function(points) {
     ctx.fill();
   }
 };
+
+
+// Function signature:
+// f(e) where:
+// e = {
+//   dygraph: ...,
+//   canvas: ...,
+//   drawingContext: ...
+//   name: ...,
+//   color: ...,
+//   axis: ...,
+//   points: ...,
+// }
