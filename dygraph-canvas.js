@@ -1,4 +1,6 @@
 /**
+  ctx.strokeStyle = color;
+  ctx.lineWidth = strokeWidth;
  * @license
  * Copyright 2006 Dan Vanderkam (danvdk@gmail.com)
  * MIT-licensed (http://opensource.org/licenses/MIT)
@@ -474,12 +476,18 @@ DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName) {
         }
       }
 
+      var color = this.colors[setName];
+      var strokeWidth = this.dygraph_.getOption("strokeWidth", setName);
+
       ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = strokeWidth;
       p({
         points: points,
         setName: setName,
         drawingContext: this.elementContext,
-        color: this.colors[setName],
+        color: color,
+        strokeWidth: strokeWidth,
         dygraph: this.dygraph_,
         axis: this.dygraph_.axisPropertiesForSeries(setName),
         plotArea: this.area
@@ -495,8 +503,8 @@ DygraphCanvasRenderer.Plotters = {
     var setName = e.setName;
     var ctx = e.drawingContext;
     var color = e.color;
+    var strokeWidth = e.strokeWidth;
 
-    var strokeWidth = g.getOption("strokeWidth", setName);
     var borderWidth = g.getOption("strokeBorderWidth", setName);
     var drawPointCallback = g.getOption("drawPointCallback", setName) ||
         Dygraph.Circles.DEFAULT;

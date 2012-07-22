@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7; IE=EmulateIE9">
+    <title>Plotters demo</title>
+    <!--[if IE]>
+    <script type="text/javascript" src="../excanvas.js"></script>
+    <![endif]-->
+    <script type="text/javascript" src="../dygraph-dev.js"></script>
+  </head>
+  <body>
+    <h2>Custom Plotters</h2>
+    <p>This demonstrates how to build custom plotters with dygraphs.</p>
+
+    <div id="demodiv"></div>
+
+    <script type="text/javascript">
+      g = new Dygraph(
+              document.getElementById("demodiv"),
+              "Date,Widgets Sold\n" +
+              "2012/07/21,10\n" +
+              "2012/07/22,12\n" +
+              "2012/07/23,9\n"  +
+              "2012/07/24,16\n" +
+              "2012/07/25,10\n",
+              {
+                legend: 'always',
+                width: 640,
+                height: 480,
+                title: 'Daily Widget Sales',
+                includeZero: true,
+                dateWindow: [ Date.parse("2012/07/20"), Date.parse("2012/07/26") ],
+                animatedZooms: true,
+
+                plotter: function(e) {
+                  var ctx = e.drawingContext;
+                  var points = e.points;
+                  var y_bottom = e.dygraph.toDomYCoord(0);
+                  var bar_width = 50;  // pixels
+
+                  // The RGBColor class is provided by rgbcolor.js, which is
+                  // packed in with dygraphs.
+                  var color = new RGBColor(e.color);
+                  color.r = Math.floor((255 + color.r) / 2);
+                  color.g = Math.floor((255 + color.g) / 2);
+                  color.b = Math.floor((255 + color.b) / 2);
+                  ctx.fillStyle = color.toRGB();
+
+                  for (var i = 0; i < points.length; i++) {
+                    var p = points[i];
+                    var center_x = p.canvasx;
+
+                    ctx.fillRect(center_x - bar_width / 2, p.canvasy,
+                                 bar_width, y_bottom - p.canvasy);
+
+                    ctx.strokeRect(center_x - bar_width / 2, p.canvasy,
+                                   bar_width, y_bottom - p.canvasy);
+                  }
+                }
+              }
+          );
+    </script>
+</body>
+</html>
