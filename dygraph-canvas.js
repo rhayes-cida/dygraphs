@@ -489,7 +489,10 @@ DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName) {
         strokeWidth: strokeWidth,
         dygraph: this.dygraph_,
         axis: this.dygraph_.axisPropertiesForSeries(setName),
-        plotArea: this.area
+        plotArea: this.area,
+        seriesIndex: j,
+        seriesCount: sets.length,
+        allSeriesPoints: sets
       });
       ctx.restore();
     }
