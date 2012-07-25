@@ -249,7 +249,6 @@ DygraphCanvasRenderer._predicateThatSkipsEmptyPoints =
 };
 
 /**
- *
  * TODO(danvk): rename this function
  * @private
  */
