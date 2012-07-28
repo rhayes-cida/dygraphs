@@ -499,129 +499,151 @@ DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName) {
   }
 };
 
+/**
+ * Standard plotters. These may be used by clients.
+ * By default, the plotter is [fillPlotter, errorPlotter, linePlotter].
+ * This causes all the lines to be drawn over all the fills/error bars.
+ */
 DygraphCanvasRenderer.Plotters = {
   linePlotter: function(e) {
-    var g = e.dygraph;
-    var setName = e.setName;
-    var ctx = e.drawingContext;
-    var color = e.color;
-    var strokeWidth = e.strokeWidth;
-
-    var borderWidth = g.getOption("strokeBorderWidth", setName);
-    var drawPointCallback = g.getOption("drawPointCallback", setName) ||
-        Dygraph.Circles.DEFAULT;
-    var strokePattern = g.getOption("strokePattern", setName);
-    var drawPoints = g.getOption("drawPoints", setName);
-    var pointSize = g.getOption("pointSize", setName);
-
-    if (borderWidth && strokeWidth) {
-      DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
-          g.getOption("strokeBorderColor", setName),
-          strokeWidth + 2 * borderWidth,
-          strokePattern, drawPoints, drawPointCallback, pointSize
-          );
-    }
-
-    // TODO(danvk): reduce the number of arguments to this fn by passing in e.
-    DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
-        color,
-        strokeWidth,
-        strokePattern,
-        drawPoints,
-        drawPointCallback,
-        pointSize
-    );
+    DygraphCanvasRenderer._linePlotter(e);
   },
 
   fillPlotter: function(e) {
     DygraphCanvasRenderer._fillPlotter(e);
   },
 
-  /**
-   * Draws the shaded error bars/confidence intervals for each series.
-   * This happens before the center lines are drawn, since the center lines
-   * need to be drawn on top of the error bars for all series.
-   */
   errorPlotter: function(e) {
-    var g = e.dygraph;
-    var errorBars = g.getOption("errorBars") || g.getOption("customBars");
-    if (!errorBars) return;
-
-    var fillGraph = g.getOption("fillGraph");
-    if (fillGraph) {
-      g.warn("Can't use fillGraph option with error bars");
-    }
-
-    var setName = e.setName;
-    var ctx = e.drawingContext;
-    var color = e.color;
-    var fillAlpha = g.getOption('fillAlpha', setName);
-    var stepPlot = g.getOption('stepPlot');  // TODO(danvk): per-series
-    var axis = e.axis;
-    var points = e.points;
-
-    var iter = Dygraph.createIterator(points, 0, points.length,
-        DygraphCanvasRenderer._getIteratorPredicate(
-            g.getOption("connectSeparatedPoints")));
-
-    var newYs;
-
-    // setup graphics context
-    var prevX = NaN;
-    var prevY = NaN;
-    var prevYs = [-1, -1];
-    var yscale = axis.yscale;
-    // should be same color as the lines but only 15% opaque.
-    var rgb = new RGBColor(color);
-    var err_color =
-        'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + fillAlpha + ')';
-    ctx.fillStyle = err_color;
-    ctx.beginPath();
-    while (iter.hasNext) {
-      var point = iter.next();
-      if (!Dygraph.isOK(point.y)) {
-        prevX = NaN;
-        continue;
-      }
-
-      if (stepPlot) {
-        newYs = [ point.y_bottom, point.y_top ];
-        prevY = point.y;
-      } else {
-        newYs = [ point.y_bottom, point.y_top ];
-      }
-      newYs[0] = e.plotArea.h * newYs[0] + e.plotArea.y;
-      newYs[1] = e.plotArea.h * newYs[1] + e.plotArea.y;
-      if (!isNaN(prevX)) {
-        if (stepPlot) {
-          ctx.moveTo(prevX, newYs[0]);
-        } else {
-          ctx.moveTo(prevX, prevYs[0]);
-        }
-        ctx.lineTo(point.canvasx, newYs[0]);
-        ctx.lineTo(point.canvasx, newYs[1]);
-        if (stepPlot) {
-          ctx.lineTo(prevX, newYs[1]);
-        } else {
-          ctx.lineTo(prevX, prevYs[1]);
-        }
-        ctx.closePath();
-      }
-      prevYs = newYs;
-      prevX = point.canvasx;
-    }
-    ctx.fill();
+    DygraphCanvasRenderer._errorPlotter(e);
   }
 };
+
+/**
+ * Plotter which draws the central lines for a series.
+ * @private
+ */
+DygraphCanvasRenderer._linePlotter = function(e) {
+  var g = e.dygraph;
+  var setName = e.setName;
+  var ctx = e.drawingContext;
+  var color = e.color;
+  var strokeWidth = e.strokeWidth;
+
+  var borderWidth = g.getOption("strokeBorderWidth", setName);
+  var drawPointCallback = g.getOption("drawPointCallback", setName) ||
+      Dygraph.Circles.DEFAULT;
+  var strokePattern = g.getOption("strokePattern", setName);
+  var drawPoints = g.getOption("drawPoints", setName);
+  var pointSize = g.getOption("pointSize", setName);
+
+  if (borderWidth && strokeWidth) {
+    DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
+        g.getOption("strokeBorderColor", setName),
+        strokeWidth + 2 * borderWidth,
+        strokePattern, drawPoints, drawPointCallback, pointSize
+        );
+  }
+
+  // TODO(danvk): reduce the number of arguments to this fn by passing in e.
+  DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
+      color,
+      strokeWidth,
+      strokePattern,
+      drawPoints,
+      drawPointCallback,
+      pointSize
+  );
+}
+
+/**
+ * Draws the shaded error bars/confidence intervals for each series.
+ * This happens before the center lines are drawn, since the center lines
+ * need to be drawn on top of the error bars for all series.
+ * @private
+ */
+DygraphCanvasRenderer._errorPlotter = function(e) {
+  var g = e.dygraph;
+  var errorBars = g.getOption("errorBars") || g.getOption("customBars");
+  if (!errorBars) return;
+
+  var fillGraph = g.getOption("fillGraph");
+  if (fillGraph) {
+    g.warn("Can't use fillGraph option with error bars");
+  }
+
+  var setName = e.setName;
+  var ctx = e.drawingContext;
+  var color = e.color;
+  var fillAlpha = g.getOption('fillAlpha', setName);
+  var stepPlot = g.getOption('stepPlot');  // TODO(danvk): per-series
+  var axis = e.axis;
+  var points = e.points;
+
+  var iter = Dygraph.createIterator(points, 0, points.length,
+      DygraphCanvasRenderer._getIteratorPredicate(
+          g.getOption("connectSeparatedPoints")));
+
+  var newYs;
+
+  // setup graphics context
+  var prevX = NaN;
+  var prevY = NaN;
+  var prevYs = [-1, -1];
+  var yscale = axis.yscale;
+  // should be same color as the lines but only 15% opaque.
+  var rgb = new RGBColor(color);
+  var err_color =
+      'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + fillAlpha + ')';
+  ctx.fillStyle = err_color;
+  ctx.beginPath();
+  while (iter.hasNext) {
+    var point = iter.next();
+    if (!Dygraph.isOK(point.y)) {
+      prevX = NaN;
+      continue;
+    }
+
+    if (stepPlot) {
+      newYs = [ point.y_bottom, point.y_top ];
+      prevY = point.y;
+    } else {
+      newYs = [ point.y_bottom, point.y_top ];
+    }
+    newYs[0] = e.plotArea.h * newYs[0] + e.plotArea.y;
+    newYs[1] = e.plotArea.h * newYs[1] + e.plotArea.y;
+    if (!isNaN(prevX)) {
+      if (stepPlot) {
+        ctx.moveTo(prevX, newYs[0]);
+      } else {
+        ctx.moveTo(prevX, prevYs[0]);
+      }
+      ctx.lineTo(point.canvasx, newYs[0]);
+      ctx.lineTo(point.canvasx, newYs[1]);
+      if (stepPlot) {
+        ctx.lineTo(prevX, newYs[1]);
+      } else {
+        ctx.lineTo(prevX, prevYs[1]);
+      }
+      ctx.closePath();
+    }
+    prevYs = newYs;
+    prevX = point.canvasx;
+  }
+  ctx.fill();
+}
 
 /**
  * Draws the shaded regions when "fillGraph" is set. Not to be confused with
  * error bars.
  *
+ * For stacked charts, it's more convenient to handle all the series
+ * simultaneously. So this plotter plots all the points on the first series
+ * it's asked to draw, then ignores all the other series.
+ *
  * @private
  */
 DygraphCanvasRenderer._fillPlotter = function(e) {
-  // We'l handle all the series at once, not one-by-one.
+  // We'll handle all the series at once, not one-by-one.
   if (e.seriesIndex !== 0) return;
 
   var g = e.dygraph;
