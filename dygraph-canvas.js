@@ -534,7 +534,7 @@ DygraphCanvasRenderer.Plotters = {
   },
 
   fillPlotter: function(e) {
-    // TODO(danvk): implement
+    DygraphCanvasRenderer._fillPlotter(e);
   },
 
   /**
@@ -620,13 +620,21 @@ DygraphCanvasRenderer.Plotters = {
  *
  * @private
  */
-DygraphCanvasRenderer.prototype.drawFillBars_ = function(points) {
-  var ctx = this.elementContext;
-  var setNames = this.layout.setNames;
+DygraphCanvasRenderer._fillPlotter = function(e) {
+  // We'l handle all the series at once, not one-by-one.
+  if (e.seriesIndex !== 0) return;
+
+  var g = e.dygraph;
+  var ctx = e.drawingContext;
+  var setNames = g.getLabels().slice(1);  // remove x-axis
   var setCount = setNames.length;
-  var fillAlpha = this.attr_('fillAlpha');
-  var stepPlot = this.attr_('stepPlot');
-  var stackedGraph = this.attr_("stackedGraph");
+
+  var fillAlpha = g.getOption('fillAlpha');
+  var stepPlot = g.getOption('stepPlot');
+  var stackedGraph = g.getOption("stackedGraph");
+  var colors = g.getColors();
+  var area = e.plotArea;
+  var sets = e.allSeriesPoints;
 
   var baseline = {};  // for stacked graphs: baseline for filling
   var currBaseline;
@@ -634,17 +642,17 @@ DygraphCanvasRenderer.prototype.drawFillBars_ = function(points) {
   // process sets in reverse order (needed for stacked graphs)
   for (var setIdx = setCount - 1; setIdx >= 0; setIdx--) {
     var setName = setNames[setIdx];
-    var color = this.colors[setName];
-    var axis = this.dygraph_.axisPropertiesForSeries(setName);
+    var color = colors[setIdx];
+    var axis = g.axisPropertiesForSeries(setName);
     var axisY = 1.0 + axis.minyval * axis.yscale;
     if (axisY < 0.0) axisY = 0.0;
     else if (axisY > 1.0) axisY = 1.0;
-    axisY = this.area.h * axisY + this.area.y;
+    axisY = area.h * axisY + area.y;
 
-    var points = this.layout.points[setIdx];
+    var points = sets[setIdx];
     var iter = Dygraph.createIterator(points, 0, points.length,
         DygraphCanvasRenderer._getIteratorPredicate(
-            this.attr_("connectSeparatedPoints")));
+            g.getOption("connectSeparatedPoints")));
 
     // setup graphics context
     var prevX = NaN;
@@ -717,16 +725,3 @@ DygraphCanvasRenderer.prototype.drawFillBars_ = function(points) {
     ctx.fill();
   }
 };
-
-
-// Function signature:
-// f(e) where:
-// e = {
-//   dygraph: ...,
-//   canvas: ...,
-//   drawingContext: ...
-//   name: ...,
-//   color: ...,
-//   axis: ...,
-//   points: ...,
-// }
