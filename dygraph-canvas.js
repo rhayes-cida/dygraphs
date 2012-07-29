@@ -643,10 +643,12 @@ DygraphCanvasRenderer._errorPlotter = function(e) {
  * @private
  */
 DygraphCanvasRenderer._fillPlotter = function(e) {
+  var g = e.dygraph;
+  if (!g.getOption("fillGraph")) return;
+
   // We'll handle all the series at once, not one-by-one.
   if (e.seriesIndex !== 0) return;
 
-  var g = e.dygraph;
   var ctx = e.drawingContext;
   var area = e.plotArea;
   var sets = e.allSeriesPoints;
