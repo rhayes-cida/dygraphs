@@ -648,15 +648,22 @@ DygraphCanvasRenderer._fillPlotter = function(e) {
 
   var g = e.dygraph;
   var ctx = e.drawingContext;
+  var area = e.plotArea;
+  var sets = e.allSeriesPoints;
+  var setCount = sets.length;
+
   var setNames = g.getLabels().slice(1);  // remove x-axis
-  var setCount = setNames.length;
+  // getLabels() includes names for invisible series, which are not included in
+  // allSeriesPoints. We remove those to make the two match.
+  // TODO(danvk): provide a simpler way to get this information.
+  for (var i = setNames.length; i >= 0; i--) {
+    if (!g.visibility()[i]) setNames.splice(i, 1);
+  }
 
   var fillAlpha = g.getOption('fillAlpha');
   var stepPlot = g.getOption('stepPlot');
   var stackedGraph = g.getOption("stackedGraph");
   var colors = g.getColors();
-  var area = e.plotArea;
-  var sets = e.allSeriesPoints;
 
   var baseline = {};  // for stacked graphs: baseline for filling
   var currBaseline;
