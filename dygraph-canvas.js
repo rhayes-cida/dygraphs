@@ -253,7 +253,7 @@ DygraphCanvasRenderer._predicateThatSkipsEmptyPoints =
  * @private
  */
 DygraphCanvasRenderer._drawStyledLine = function(e,
-    ctx, points, setName, color, strokeWidth, strokePattern, drawPoints,
+    color, strokeWidth, strokePattern, drawPoints,
     drawPointCallback, pointSize) {
   var g = e.dygraph;
   // TODO(konigsberg): Compute attributes outside this method call.
@@ -261,7 +261,8 @@ DygraphCanvasRenderer._drawStyledLine = function(e,
   if (!Dygraph.isArrayLike(strokePattern)) {
     strokePattern = null;
   }
-  var drawGapPoints = g.getOption('drawGapEdgePoints', setName);
+
+  var drawGapPoints = g.getOption('drawGapEdgePoints', e.setName);
 
   var points = e.points;
   var iter = Dygraph.createIterator(points, 0, points.length,
@@ -270,13 +271,16 @@ DygraphCanvasRenderer._drawStyledLine = function(e,
 
   var stroking = strokePattern && (strokePattern.length >= 2);
 
+  var ctx = e.drawingContext;
   ctx.save();
   if (stroking) {
     ctx.installPattern(strokePattern);
   }
 
-  var pointsOnLine = DygraphCanvasRenderer._drawSeries(e, ctx, iter, strokeWidth, pointSize, drawPoints, drawGapPoints, stepPlot, color);
-  DygraphCanvasRenderer._drawPointsOnLine(e, ctx, pointsOnLine, drawPointCallback, setName, color, pointSize);
+  var pointsOnLine = DygraphCanvasRenderer._drawSeries(
+      e, iter, strokeWidth, pointSize, drawPoints, drawGapPoints, stepPlot, color);
+  DygraphCanvasRenderer._drawPointsOnLine(
+      e, pointsOnLine, drawPointCallback, color, pointSize);
 
   if (stroking) {
     ctx.uninstallPattern();
@@ -286,28 +290,11 @@ DygraphCanvasRenderer._drawStyledLine = function(e,
 };
 
 /**
- * This fires the drawPointCallback functions, which draw dots on the points by
- * default. This gets used when the "drawPoints" option is set, or when there
- * are isolated points.
- * @private
- */
-DygraphCanvasRenderer._drawPointsOnLine = function(e, ctx, pointsOnLine, drawPointCallback, setName, color, pointSize) {
-  for (var idx = 0; idx < pointsOnLine.length; idx++) {
-    var cb = pointsOnLine[idx];
-    ctx.save();
-    drawPointCallback(
-        e.dygraph, setName, ctx, cb[0], cb[1], color, pointSize);
-    ctx.restore();
-  }
-}
-
-/**
  * This does the actual drawing of lines on the canvas, for just one series.
  * @private
  */
 DygraphCanvasRenderer._drawSeries = function(e,
-    ctx, iter, strokeWidth, pointSize, drawPoints, drawGapPoints,
-    stepPlot, color) {
+    iter, strokeWidth, pointSize, drawPoints, drawGapPoints, stepPlot, color) {
 
   var prevCanvasX = null;
   var prevCanvasY = null;
@@ -317,6 +304,7 @@ DygraphCanvasRenderer._drawSeries = function(e,
   var pointsOnLine = []; // Array of [canvasx, canvasy] pairs.
   var first = true; // the first cycle through the while loop
 
+  var ctx = e.drawingContext;
   ctx.beginPath();
   ctx.strokeStyle = color;
   ctx.lineWidth = strokeWidth;
@@ -387,6 +375,23 @@ DygraphCanvasRenderer._drawSeries = function(e,
   ctx.stroke();
   return pointsOnLine;
 };
+
+/**
+ * This fires the drawPointCallback functions, which draw dots on the points by
+ * default. This gets used when the "drawPoints" option is set, or when there
+ * are isolated points.
+ * @private
+ */
+DygraphCanvasRenderer._drawPointsOnLine = function(e, pointsOnLine, drawPointCallback, color, pointSize) {
+  var ctx = e.drawingContext;
+  for (var idx = 0; idx < pointsOnLine.length; idx++) {
+    var cb = pointsOnLine[idx];
+    ctx.save();
+    drawPointCallback(
+        e.dygraph, e.setName, ctx, cb[0], cb[1], color, pointSize);
+    ctx.restore();
+  }
+}
 
 /**
  * Attaches canvas coordinates to the points array.
@@ -525,10 +530,11 @@ DygraphCanvasRenderer.Plotters = {
 DygraphCanvasRenderer._linePlotter = function(e) {
   var g = e.dygraph;
   var setName = e.setName;
-  var ctx = e.drawingContext;
-  var color = e.color;
   var strokeWidth = e.strokeWidth;
 
+  // TODO(danvk): Check if there's any performance impact of just calling
+  // getOption() inside of _drawStyledLine. Passing in so many parameters makes
+  // this code a bit nasty.
   var borderWidth = g.getOption("strokeBorderWidth", setName);
   var drawPointCallback = g.getOption("drawPointCallback", setName) ||
       Dygraph.Circles.DEFAULT;
@@ -537,16 +543,18 @@ DygraphCanvasRenderer._linePlotter = function(e) {
   var pointSize = g.getOption("pointSize", setName);
 
   if (borderWidth && strokeWidth) {
-    DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
+    DygraphCanvasRenderer._drawStyledLine(e,
         g.getOption("strokeBorderColor", setName),
         strokeWidth + 2 * borderWidth,
-        strokePattern, drawPoints, drawPointCallback, pointSize
+        strokePattern,
+        drawPoints,
+        drawPointCallback,
+        pointSize
         );
   }
 
-  // TODO(danvk): reduce the number of arguments to this fn by passing in e.
-  DygraphCanvasRenderer._drawStyledLine(e, ctx, e.points, setName,
-      color,
+  DygraphCanvasRenderer._drawStyledLine(e,
+      e.color,
       strokeWidth,
       strokePattern,
       drawPoints,
