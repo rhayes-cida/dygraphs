@@ -249,7 +249,7 @@ DygraphCanvasRenderer._predicateThatSkipsEmptyPoints =
 };
 
 /**
- * TODO(danvk): rename this function
+ * Draws a line with the styles passed in and calls all the drawPointCallbacks.
  * @private
  */
 DygraphCanvasRenderer._drawStyledLine = function(e,
@@ -291,6 +291,9 @@ DygraphCanvasRenderer._drawStyledLine = function(e,
 
 /**
  * This does the actual drawing of lines on the canvas, for just one series.
+ * Returns a list of [canvasx, canvasy] pairs for points for which a
+ * drawPointCallback should be fired.  These include isolated points, or all
+ * points if drawPoints=true.
  * @private
  */
 DygraphCanvasRenderer._drawSeries = function(e,
@@ -382,7 +385,8 @@ DygraphCanvasRenderer._drawSeries = function(e,
  * are isolated points.
  * @private
  */
-DygraphCanvasRenderer._drawPointsOnLine = function(e, pointsOnLine, drawPointCallback, color, pointSize) {
+DygraphCanvasRenderer._drawPointsOnLine = function(
+    e, pointsOnLine, drawPointCallback, color, pointSize) {
   var ctx = e.drawingContext;
   for (var idx = 0; idx < pointsOnLine.length; idx++) {
     var cb = pointsOnLine[idx];
