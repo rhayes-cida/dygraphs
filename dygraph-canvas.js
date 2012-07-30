@@ -1,6 +1,4 @@
 /**
-  ctx.strokeStyle = color;
-  ctx.lineWidth = strokeWidth;
  * @license
  * Copyright 2006 Dan Vanderkam (danvdk@gmail.com)
  * MIT-licensed (http://opensource.org/licenses/MIT)

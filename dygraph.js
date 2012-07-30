@@ -1861,6 +1861,9 @@ Dygraph.prototype.updateSelection_ = function(opt_animFraction) {
       ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
       ctx.fillRect(0, 0, this.width_, this.height_);
     }
+
+    // Redraw only the highlighted series in the interactive canvas (not the
+    // static plot canvas, which is where series are usually drawn).
     this.plotter_._renderLineChart(this.highlightSet_, ctx);
   } else if (this.previousVerticalX_ >= 0) {
     // Determine the maximum highlight circle size.
