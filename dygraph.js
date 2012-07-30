@@ -1861,9 +1861,7 @@ Dygraph.prototype.updateSelection_ = function(opt_animFraction) {
       ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
       ctx.fillRect(0, 0, this.width_, this.height_);
     }
-    // var setIdx = this.datasetIndexFromSetName_(this.highlightSet_);
-    // this.plotter_._drawLine(ctx, setIdx);
-    this.plotter_._renderLineChart(this.highlightSet_);
+    this.plotter_._renderLineChart(this.highlightSet_, ctx);
   } else if (this.previousVerticalX_ >= 0) {
     // Determine the maximum highlight circle size.
     var maxCircleSize = 0;

@@ -429,14 +429,16 @@ DygraphCanvasRenderer.prototype._updatePoints = function() {
  * Add canvas Actually draw the lines chart, including error bars.
  * If opt_seriesName is specified, only that series will be drawn.
  * (This is used for expedited redrawing with highlightSeriesOpts)
+ * Lines are typically drawn in the non-interactive dygraph canvas. If opt_ctx
+ * is specified, they can be drawn elsewhere.
  *
  * This function can only be called if DygraphLayout's points array has been
  * updated with canvas{x,y} attributes, i.e. by
  * DygraphCanvasRenderer._updatePoints.
  * @private
  */
-DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName) {
-  var ctx = this.elementContext;
+DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName, opt_ctx) {
+  var ctx = opt_ctx || this.elementContext;
   var errorBars = this.attr_("errorBars") || this.attr_("customBars");
   var fillGraph = this.attr_("fillGraph");
   var i;
@@ -493,7 +495,7 @@ DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName) {
       p({
         points: points,
         setName: setName,
-        drawingContext: this.elementContext,
+        drawingContext: ctx,
         color: color,
         strokeWidth: strokeWidth,
         dygraph: this.dygraph_,
