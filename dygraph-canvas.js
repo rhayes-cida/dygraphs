@@ -509,11 +509,10 @@ DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName, opt_
 };
 
 /**
- * Standard plotters. These may be used by clients.
- * By default, the plotter is [fillPlotter, errorPlotter, linePlotter].
- * This causes all the lines to be drawn over all the fills/error bars.
+ * Standard plotters. These may be used by clients via Dygraph.Plotters.
+ * See comments there for more details.
  */
-DygraphCanvasRenderer.Plotters = {
+DygraphCanvasRenderer._Plotters = {
   linePlotter: function(e) {
     DygraphCanvasRenderer._linePlotter(e);
   },

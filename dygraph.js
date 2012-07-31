@@ -180,6 +180,18 @@ Dygraph.dateAxisFormatter = function(date, granularity) {
   }
 };
 
+/**
+ * Standard plotters. These may be used by clients.
+ * Available plotters are:
+ * - Dygraph.Plotters.linePlotter: draws central lines (most common)
+ * - Dygraph.Plotters.errorPlotter: draws error bars
+ * - Dygraph.Plotters.fillPlotter: draws fills under lines (used with fillGraph)
+ *
+ * By default, the plotter is [fillPlotter, errorPlotter, linePlotter].
+ * This causes all the lines to be drawn over all the fills/error bars.
+ */
+Dygraph.Plotters = DygraphCanvasRenderer._Plotters;
+
 
 // Default attribute values.
 Dygraph.DEFAULT_ATTRS = {
@@ -264,9 +276,9 @@ Dygraph.DEFAULT_ATTRS = {
   // The ordering here ensures that central lines always appear above any
   // fill bars/error bars.
   plotter: [
-    DygraphCanvasRenderer.Plotters.fillPlotter,
-    DygraphCanvasRenderer.Plotters.errorPlotter,
-    DygraphCanvasRenderer.Plotters.linePlotter
+    Dygraph.Plotters.fillPlotter,
+    Dygraph.Plotters.errorPlotter,
+    Dygraph.Plotters.linePlotter
   ],
 
   // per-axis options
