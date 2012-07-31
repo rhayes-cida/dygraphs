@@ -10,6 +10,9 @@
 
     <script type="text/javascript" src="data.js"></script>
     <style type="text/css">
+      body {
+        max-width: 750px;
+      }
       div.chart {
         width: 640px;
         height: 320px;
@@ -17,8 +20,10 @@
     </style>
   </head>
   <body>
-    <h2>Custom Plotters</h2>
-    <p>This demonstrates how to build custom plotters with dygraphs.</p>
+    <p>This page demonstrates how to build custom plotters with dygraphs.
+    The <a href="http://dygraphs.com/options.html#plotter">plotter</a> option
+    allows you to write your own drawing logic. This can be used to achieve
+    powerful customization. View source to see how the examples work.</p>
 
     <h2>Bar Chart</h2>
     <p>Here a specialized <a
@@ -40,8 +45,17 @@
     <h2>Multi-column Bar Chart</h2>
     <div id="multibar" class="chart"></div>
 
+    <h2>Mixed Error Bars and Lines</h2>
+    <p>You can tweak the standard plotters list to achieve effects which would
+    be difficult otherwise, e.g. drawing series with only confidence intervals
+    and showing error bars only for some series.</p>
+    <div id="mixed-error" class="chart"></div>
+
     <script type="text/javascript">
 
+      // This function draws bars for a single series. See
+      // multiColumnBarPlotter below for a plotter which can draw multi-series
+      // bar charts.
       function barChartPlotter(e) {
         var ctx = e.drawingContext;
         var points = e.points;
@@ -64,6 +78,7 @@
         }
         var bar_width = Math.floor(2.0 / 3 * min_sep);
 
+        // Do the actual plotting.
         for (var i = 0; i < points.length; i++) {
           var p = points[i];
           var center_x = p.canvasx;
@@ -214,8 +229,8 @@ var candleData = "Date,Open,Close,High,Low\n" +
               plotter: candlePlotter
             });
 
-    // Bar and Line chart
 
+    // Bar and Line chart
     var short_data = data_nolabel();
     short_data = short_data.split('\n').slice(0, 20).join('\n');
 
@@ -234,7 +249,9 @@ var candleData = "Date,Open,Close,High,Low\n" +
             });
 
 
+    // Multiple column bar chart
     function multiColumnBarPlotter(e) {
+      // We need to handle all the series simultaneously.
       if (e.seriesIndex !== 0) return;
 
       var g = e.dygraph;
@@ -287,6 +304,21 @@ var candleData = "Date,Open,Close,High,Low\n" +
             {
               includeZero: true,
               plotter: multiColumnBarPlotter
+            });
+
+    // Mixed Error Bars and Lines
+    g5 = new Dygraph(
+            document.getElementById("mixed-error"),
+            NoisyData(),
+            {
+              errorBars: true,
+              'A': {
+                plotter: Dygraph.Plotters.errorPlotter
+              },
+              'B': {
+                plotter: Dygraph.Plotters.linePlotter,
+                strokePattern: Dygraph.DASHED_LINE
+              }
             });
 
     </script>
