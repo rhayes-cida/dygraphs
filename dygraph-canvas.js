@@ -87,7 +87,12 @@ var DygraphCanvasRenderer = function(dygraph, element, elementContext, layout) {
   }
 };
 
-DygraphCanvasRenderer.prototype.attr_ = function(x, y) {
+/**
+ * This just forwards to dygraph.attr_.
+ * TODO(danvk): remove this?
+ * @private
+ */
+DygraphCanvasRenderer.prototype.attr_ = function(name, opt_seriesName) {
   return this.dygraph_.attr_(x, y);
 };
 
@@ -248,6 +253,7 @@ DygraphCanvasRenderer._predicateThatSkipsEmptyPoints =
 
 /**
  * Draws a line with the styles passed in and calls all the drawPointCallbacks.
+ * @param {Object} e The dictionary passed to the plotter function.
  * @private
  */
 DygraphCanvasRenderer._drawStyledLine = function(e,
@@ -292,6 +298,7 @@ DygraphCanvasRenderer._drawStyledLine = function(e,
  * Returns a list of [canvasx, canvasy] pairs for points for which a
  * drawPointCallback should be fired.  These include isolated points, or all
  * points if drawPoints=true.
+ * @param {Object} e The dictionary passed to the plotter function.
  * @private
  */
 DygraphCanvasRenderer._drawSeries = function(e,
@@ -381,6 +388,7 @@ DygraphCanvasRenderer._drawSeries = function(e,
  * This fires the drawPointCallback functions, which draw dots on the points by
  * default. This gets used when the "drawPoints" option is set, or when there
  * are isolated points.
+ * @param {Object} e The dictionary passed to the plotter function.
  * @private
  */
 DygraphCanvasRenderer._drawPointsOnLine = function(
