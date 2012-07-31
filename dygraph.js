@@ -429,6 +429,7 @@ Dygraph.prototype.__init__ = function(div, file, attrs) {
   this.datasetIndex_ = [];
 
   this.registeredEvents_ = [];
+  this.eventListeners_ = {};
 
   // Create the containing DIV and other interactive elements
   this.createInterface_();
@@ -456,7 +457,6 @@ Dygraph.prototype.__init__ = function(div, file, attrs) {
 
   // At this point, plugins can no longer register event handlers.
   // Construct a map from event -> ordered list of [callback, plugin].
-  this.eventListeners_ = {};
   for (var i = 0; i < this.plugins_.length; i++) {
     var plugin_dict = this.plugins_[i];
     for (var eventName in plugin_dict.events) {
@@ -951,7 +951,6 @@ Dygraph.prototype.createInterface_ = function() {
   if (this.attr_('showRangeSelector')) {
     // The range selector must be created here so that its canvases and contexts get created here.
     // For some reason, if the canvases and contexts don't get created here, things don't work in IE.
-    // The range selector also sets xAxisHeight in order to reserve space.
     this.rangeSelector_ = new DygraphRangeSelector(this);
   }
 
@@ -969,12 +968,12 @@ Dygraph.prototype.createInterface_ = function() {
   }
 
   var dygraph = this;
-  
+
   this.mouseMoveHandler = function(e) {
     dygraph.mouseMove_(e);
   };
   this.addEvent(this.mouseEventElement_, 'mousemove', this.mouseMoveHandler);
-  
+
   this.mouseOutHandler = function(e) {
     dygraph.mouseOut_(e);
   };
@@ -1003,7 +1002,7 @@ Dygraph.prototype.destroy = function() {
       node.removeChild(node.firstChild);
     }
   };
- 
+
   for (var idx = 0; idx < this.registeredEvents_.length; idx++) {
     var reg = this.registeredEvents_[idx];
     Dygraph.removeEvent(reg.elem, reg.type, reg.fn);
@@ -1755,7 +1754,7 @@ Dygraph.prototype.mouseMove_ = function(event) {
 
   var highlightSeriesOpts = this.attr_("highlightSeriesOpts");
   var selectionChanged = false;
-  if (highlightSeriesOpts) {
+  if (highlightSeriesOpts && !this.lockedSet_) {
     var closest;
     if (this.attr_("stackedGraph")) {
       closest = this.findStackedPoint(canvasx, canvasy);
@@ -1928,8 +1927,11 @@ Dygraph.prototype.updateSelection_ = function(opt_animFraction) {
  * hover dots on the chart). Set to false to clear any selection.
  * @param { seriesName } optional series name to highlight that series with the
  * the highlightSeriesOpts setting.
+ * @param { locked } optional If true, keep seriesName selected when mousing
+ * over the graph, disabling closest-series highlighting. Call clearSelection()
+ * to unlock it.
  */
-Dygraph.prototype.setSelection = function(row, opt_seriesName) {
+Dygraph.prototype.setSelection = function(row, opt_seriesName, opt_locked) {
   // Extract the points we've selected
   this.selPoints_ = [];
 
@@ -1969,6 +1971,10 @@ Dygraph.prototype.setSelection = function(row, opt_seriesName) {
     this.highlightSet_ = opt_seriesName;
   }
 
+  if (opt_locked !== undefined) {
+    this.lockedSet_ = opt_locked;
+  }
+
   if (changed) {
     this.updateSelection_(undefined);
   }
@@ -1985,7 +1991,7 @@ Dygraph.prototype.mouseOut_ = function(event) {
     this.attr_("unhighlightCallback")(event);
   }
 
-  if (this.attr_("hideOverlayOnMouseOut")) {
+  if (this.attr_("hideOverlayOnMouseOut") && !this.lockedSet_) {
     this.clearSelection();
   }
 };
@@ -1997,6 +2003,7 @@ Dygraph.prototype.mouseOut_ = function(event) {
 Dygraph.prototype.clearSelection = function() {
   this.cascadeEvents_('deselect', {});
 
+  this.lockedSet_ = false;
   // Get rid of the overlay data
   if (this.fadeLevel) {
     this.animateSelection_(-1);
@@ -2664,7 +2671,7 @@ Dygraph.prototype.computeYAxisRanges_ = function(extremes) {
  * This is where undesirable points (i.e. negative values on log scales and
  * missing values through which we wish to connect lines) are dropped.
  * TODO(danvk): the "missing values" bit above doesn't seem right.
- * 
+ *
  * @private
  */
 Dygraph.prototype.extractSeries_ = function(rawData, i, logScale) {
