@@ -87,8 +87,8 @@ var DygraphCanvasRenderer = function(dygraph, element, elementContext, layout) {
   }
 };
 
-DygraphCanvasRenderer.prototype.attr_ = function(x) {
-  return this.dygraph_.attr_(x);
+DygraphCanvasRenderer.prototype.attr_ = function(x, y) {
+  return this.dygraph_.attr_(x, y);
 };
 
 /**
@@ -460,7 +460,7 @@ DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName, opt_
     var setPlotter = this.attr_("plotter", setName);
     if (setPlotter == plotter_attr) continue;  // not specialized.
 
-    setPlotter[setName] = setPlotter;
+    setPlotters[setName] = setPlotter;
   }
 
   for (i = 0; i < plotters.length; i++) {

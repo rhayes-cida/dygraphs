@@ -7,18 +7,69 @@
     <script type="text/javascript" src="../excanvas.js"></script>
     <![endif]-->
     <script type="text/javascript" src="../dygraph-dev.js"></script>
+
+    <script type="text/javascript" src="data.js"></script>
   </head>
   <body>
     <h2>Custom Plotters</h2>
     <p>This demonstrates how to build custom plotters with dygraphs.</p>
 
     <h2>Bar Chart</h2>
+    <p>Here a specialized <a
+    href="http://dygraphs.com/options.html#plotter">plotter</a> is used to draw
+    a bar plot rather than a line plot:</p>
     <div id="demodiv"></div>
 
     <h2>Candle Chart</h2>
+    <p>Here a specialized <a
+    href="http://dygraphs.com/options.html#plotter">plotter</a> is used to
+    combined four series into a unified "Candle" plot:</p>
     <div id="candlechart" style="width: 640px; height:480px;"></div>
 
+    <h2>Bar &amp; Line Chart</h2>
+    <p>The <a href="http://dygraphs.com/options.html#plotter">plotter</a>
+    option may be set on a per-series basis to create mixed charts:</p>
+    <div id="barlinechart" style="width: 640px; height:480px;"></div>
+
+    <h2>Multi-column Bar Chart</h2>
+    <div id="multibar"></div>
+
     <script type="text/javascript">
+
+      function barChartPlotter(e) {
+        var ctx = e.drawingContext;
+        var points = e.points;
+        var y_bottom = e.dygraph.toDomYCoord(0);
+
+        // The RGBColor class is provided by rgbcolor.js, which is
+        // packed in with dygraphs.
+        var color = new RGBColor(e.color);
+        color.r = Math.floor((255 + color.r) / 2);
+        color.g = Math.floor((255 + color.g) / 2);
+        color.b = Math.floor((255 + color.b) / 2);
+        ctx.fillStyle = color.toRGB();
+
+        // Find the minimum separation between x-values.
+        // This determines the bar width.
+        var min_sep = Infinity;
+        for (var i = 1; i < points.length; i++) {
+          var sep = points[i].canvasx - points[i - 1].canvasx;
+          if (sep < min_sep) min_sep = sep;
+        }
+        var bar_width = Math.floor(2.0 / 3 * min_sep);
+
+        for (var i = 0; i < points.length; i++) {
+          var p = points[i];
+          var center_x = p.canvasx;
+
+          ctx.fillRect(center_x - bar_width / 2, p.canvasy,
+              bar_width, y_bottom - p.canvasy);
+
+          ctx.strokeRect(center_x - bar_width / 2, p.canvasy,
+              bar_width, y_bottom - p.canvasy);
+        }
+      }
+
       g = new Dygraph(
               document.getElementById("demodiv"),
               "Date,Widgets Sold\n" +
@@ -36,32 +87,7 @@
                 dateWindow: [ Date.parse("2012/07/20"), Date.parse("2012/07/26") ],
                 animatedZooms: true,
                 drawXGrid: false,
-
-                plotter: function(e) {
-                  var ctx = e.drawingContext;
-                  var points = e.points;
-                  var y_bottom = e.dygraph.toDomYCoord(0);
-                  var bar_width = 50;  // pixels
-
-                  // The RGBColor class is provided by rgbcolor.js, which is
-                  // packed in with dygraphs.
-                  var color = new RGBColor(e.color);
-                  color.r = Math.floor((255 + color.r) / 2);
-                  color.g = Math.floor((255 + color.g) / 2);
-                  color.b = Math.floor((255 + color.b) / 2);
-                  ctx.fillStyle = color.toRGB();
-
-                  for (var i = 0; i < points.length; i++) {
-                    var p = points[i];
-                    var center_x = p.canvasx;
-
-                    ctx.fillRect(center_x - bar_width / 2, p.canvasy,
-                                 bar_width, y_bottom - p.canvasy);
-
-                    ctx.strokeRect(center_x - bar_width / 2, p.canvasy,
-                                   bar_width, y_bottom - p.canvasy);
-                  }
-                }
+                plotter: barChartPlotter
               }
           );
 
@@ -177,12 +203,91 @@ var candleData = "Date,Open,Close,High,Low\n" +
   "2012-02-13,499.74,502.60,503.83,497.09\n" + 
   "2012-02-14,504.70,509.46,509.56,502.00\n" ;
 
-      g2 = new Dygraph(
-              document.getElementById("candlechart"),
-              candleData,
-              {
-                plotter: candlePlotter
-              });
+    g2 = new Dygraph(
+            document.getElementById("candlechart"),
+            candleData,
+            {
+              plotter: candlePlotter
+            });
+
+    // Bar and Line chart
+
+    var short_data = data_nolabel();
+    short_data = short_data.split('\n').slice(0, 20).join('\n');
+
+    g3 = new Dygraph(
+            document.getElementById("barlinechart"),
+            short_data,
+            {
+              labels: ['Date', 'A', 'B'],
+              includeZero: true,
+              "A": {
+                strokeWidth: 2
+              },
+              "B": {
+                plotter: barChartPlotter
+              }
+            });
+
+
+    function multiColumnBarPlotter(e) {
+      if (e.seriesIndex !== 0) return;
+
+      var g = e.dygraph;
+      var ctx = e.drawingContext;
+      var sets = e.allSeriesPoints;
+      var y_bottom = e.dygraph.toDomYCoord(0);
+
+      // Find the minimum separation between x-values.
+      // This determines the bar width.
+      var min_sep = Infinity;
+      for (var j = 0; j < sets.length; j++) {
+        var points = sets[j];
+        for (var i = 1; i < points.length; i++) {
+          var sep = points[i].canvasx - points[i - 1].canvasx;
+          if (sep < min_sep) min_sep = sep;
+        }
+      }
+      var bar_width = Math.floor(2.0 / 3 * min_sep);
+
+      var fillColors = [];
+      var strokeColors = g.getColors();
+      for (var i = 0; i < strokeColors.length; i++) {
+        var color = new RGBColor(strokeColors[i]);
+        color.r = Math.floor((255 + color.r) / 2);
+        color.g = Math.floor((255 + color.g) / 2);
+        color.b = Math.floor((255 + color.b) / 2);
+        fillColors.push(color.toRGB());
+      }
+
+      // TODO(danvk): invert these loops to conserve color-setting and improve
+      // behavior w/r/t/ missing data.
+      for (var i = 0; i < sets[0].length; i++) {
+        var p0 = sets[0][i];
+        var center_x = p0.canvasx;
+
+        for (var j = 0; j < sets.length; j++) {
+          var p = sets[j][i];
+          var x_left = center_x - (bar_width / 2) * (1 - j/(sets.length-1));
+
+          ctx.fillStyle = fillColors[j];
+          ctx.fillRect(x_left, p.canvasy,
+              bar_width/sets.length, y_bottom - p.canvasy);
+
+          ctx.strokeStyle = strokeColors[j];
+          ctx.strokeRect(x_left, p.canvasy,
+              bar_width/sets.length, y_bottom - p.canvasy);
+        }
+      }
+    }
+
+    g4 = new Dygraph(
+            document.getElementById("multibar"),
+            short_data,
+            {
+              includeZero: true,
+              plotter: multiColumnBarPlotter
+            });
 
     </script>
 </body>
