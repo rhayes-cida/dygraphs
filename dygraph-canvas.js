@@ -93,7 +93,7 @@ var DygraphCanvasRenderer = function(dygraph, element, elementContext, layout) {
  * @private
  */
 DygraphCanvasRenderer.prototype.attr_ = function(name, opt_seriesName) {
-  return this.dygraph_.attr_(x, y);
+  return this.dygraph_.attr_(name, opt_seriesName);
 };
 
 /**
