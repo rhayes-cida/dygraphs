@@ -9,6 +9,12 @@
     <script type="text/javascript" src="../dygraph-dev.js"></script>
 
     <script type="text/javascript" src="data.js"></script>
+    <style type="text/css">
+      div.chart {
+        width: 640px;
+        height: 320px;
+      }
+    </style>
   </head>
   <body>
     <h2>Custom Plotters</h2>
@@ -18,21 +24,21 @@
     <p>Here a specialized <a
     href="http://dygraphs.com/options.html#plotter">plotter</a> is used to draw
     a bar plot rather than a line plot:</p>
-    <div id="demodiv"></div>
+    <div id="demodiv" class=chart></div>
 
     <h2>Candle Chart</h2>
     <p>Here a specialized <a
     href="http://dygraphs.com/options.html#plotter">plotter</a> is used to
     combined four series into a unified "Candle" plot:</p>
-    <div id="candlechart" style="width: 640px; height:480px;"></div>
+    <div id="candlechart" class=chart></div>
 
     <h2>Bar &amp; Line Chart</h2>
     <p>The <a href="http://dygraphs.com/options.html#plotter">plotter</a>
     option may be set on a per-series basis to create mixed charts:</p>
-    <div id="barlinechart" style="width: 640px; height:480px;"></div>
+    <div id="barlinechart" class="chart"></div>
 
     <h2>Multi-column Bar Chart</h2>
-    <div id="multibar"></div>
+    <div id="multibar" class="chart"></div>
 
     <script type="text/javascript">
 
@@ -80,8 +86,6 @@
               "2012/07/25,10\n",
               {
                 legend: 'always',
-                width: 640,
-                height: 480,
                 title: 'Daily Widget Sales',
                 includeZero: true,
                 dateWindow: [ Date.parse("2012/07/20"), Date.parse("2012/07/26") ],
@@ -260,21 +264,17 @@ var candleData = "Date,Open,Close,High,Low\n" +
         fillColors.push(color.toRGB());
       }
 
-      // TODO(danvk): invert these loops to conserve color-setting and improve
-      // behavior w/r/t/ missing data.
-      for (var i = 0; i < sets[0].length; i++) {
-        var p0 = sets[0][i];
-        var center_x = p0.canvasx;
-
-        for (var j = 0; j < sets.length; j++) {
+      for (var j = 0; j < sets.length; j++) {
+        ctx.fillStyle = fillColors[j];
+        ctx.strokeStyle = strokeColors[j];
+        for (var i = 0; i < sets[j].length; i++) {
           var p = sets[j][i];
+          var center_x = p.canvasx;
           var x_left = center_x - (bar_width / 2) * (1 - j/(sets.length-1));
 
-          ctx.fillStyle = fillColors[j];
           ctx.fillRect(x_left, p.canvasy,
               bar_width/sets.length, y_bottom - p.canvasy);
 
-          ctx.strokeStyle = strokeColors[j];
           ctx.strokeRect(x_left, p.canvasy,
               bar_width/sets.length, y_bottom - p.canvasy);
         }
