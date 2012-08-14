@@ -177,7 +177,12 @@ Dygraph.removeEvent = function addEvent(elem, type, fn) {
   if (elem.removeEventListener) {
     elem.removeEventListener(type, fn, false);
   } else {
-    elem.detachEvent('on'+type, elem[type+fn]);
+    try {
+      elem.detachEvent('on'+type, elem[type+fn]);
+    } catch(e) {
+      // We only detach event listeners on a "best effort" basis in IE. See:
+      // http://stackoverflow.com/questions/2553632/detachevent-not-working-with-named-inline-functions
+    }
     elem[type+fn] = null;
   }
 };
@@ -696,7 +701,7 @@ Dygraph.Iterator = function(array, start, length, predicate) {
   this.end_ = Math.min(array.length, start + length);
   this.nextIdx_ = start - 1; // use -1 so initial advance works.
   this.next(); // ignoring result.
-}
+};
 
 Dygraph.Iterator.prototype.next = function() {
   if (!this.hasNext) {
@@ -720,7 +725,7 @@ Dygraph.Iterator.prototype.next = function() {
     this.peek = null;
   }
   return obj;
-}
+};
 
 /**
  * @private
@@ -944,7 +949,7 @@ Dygraph.regularShape_ = function(
   }
   ctx.fill();
   ctx.stroke();
-}
+};
 
 Dygraph.shapeFunction_ = function(sides, rotationRadians, delta) {
   return function(g, name, ctx, cx, cy, color, radius) {
@@ -956,7 +961,7 @@ Dygraph.shapeFunction_ = function(sides, rotationRadians, delta) {
 
 Dygraph.DrawPolygon_ = function(sides, rotationRadians, ctx, cx, cy, color, radius, delta) {
   new Dygraph.RegularShape_(sides, rotationRadians, delta).draw(ctx, cx, cy, radius);
-}
+};
 
 Dygraph.Circles = {
   DEFAULT : function(g, name, ctx, canvasx, canvasy, color, radius) {
