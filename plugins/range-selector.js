@@ -1,45 +1,93 @@
-/*
+/**
  * @license
  * Copyright 2011 Paul Felix (paul.eric.felix@gmail.com)
  * MIT-licensed (http://opensource.org/licenses/MIT)
  */
+/*global Dygraph:false,TouchEvent:false */
 
 /**
- * @fileoverview This file contains the DygraphRangeSelector class used to provide
+ * @fileoverview This file contains the RangeSelector plugin used to provide
  * a timeline range selector widget for dygraphs.
  */
+
+Dygraph.Plugins.RangeSelector = (function() {
 
 /*jshint globalstrict: true */
 /*global Dygraph:false */
 "use strict";
 
-/**
- * The DygraphRangeSelector class provides a timeline range selector widget.
- * @param {Dygraph} dygraph The dygraph object
- * @constructor
- */
-var DygraphRangeSelector = function(dygraph) {
+var rangeSelector = function() {
   this.isIE_ = /MSIE/.test(navigator.userAgent) && !window.opera;
-  this.isUsingExcanvas_ = dygraph.isUsingExcanvas_;
-  this.dygraph_ = dygraph;
   this.hasTouchInterface_ = typeof(TouchEvent) != 'undefined';
   this.isMobileDevice_ = /mobile|android/gi.test(navigator.appVersion);
+  this.interfaceCreated_ = false;
+};
+
+rangeSelector.prototype.toString = function() {
+  return "RangeSelector Plugin";
+};
+
+rangeSelector.prototype.activate = function(dygraph) {
+  this.dygraph_ = dygraph;
+  this.isUsingExcanvas_ = dygraph.isUsingExcanvas_;
+  if (this.getOption_('showRangeSelector')) {
+    this.createInterface_();
+  }
+  return {
+    layout: this.reserveSpace_,
+    predraw: this.renderStaticLayer_,
+    didDrawChart: this.renderInteractiveLayer_
+  };
+};
+
+rangeSelector.prototype.destroy = function() {
+  this.bgcanvas_ = null;
+  this.fgcanvas_ = null;
+  this.leftZoomHandle_ = null;
+  this.rightZoomHandle_ = null;
+  this.iePanOverlay_ = null;
+};
+
+//------------------------------------------------------------------
+// Private methods
+//------------------------------------------------------------------
+
+rangeSelector.prototype.getOption_ = function(name) {
+  return this.dygraph_.getOption(name);
+};
+
+rangeSelector.prototype.setDefaultOption_ = function(name, value) {
+  return this.dygraph_.attrs_[name] = value;
+};
+
+/**
+ * @private
+ * Creates the range selector elements and adds them to the graph.
+ */
+rangeSelector.prototype.createInterface_ = function() {
   this.createCanvases_();
   if (this.isUsingExcanvas_) {
     this.createIEPanOverlay_();
   }
   this.createZoomHandles_();
   this.initInteraction_();
+
+  // Range selector and animatedZooms have a bad interaction. See issue 359.
+  if (this.getOption_('animatedZooms')) {
+    this.dygraph_.warn('Animated zooms and range selector are not compatible; disabling animatedZooms.');
+    this.dygraph_.updateOptions({animatedZooms: false}, true);
+  }
+
+  this.interfaceCreated_ = true;
+  this.addToGraph_();
 };
 
 /**
- * Adds the range selector to the dygraph.
- * @param {Object} graphDiv The container div for the range selector.
- * @param {DygraphLayout} layout The DygraphLayout object for this graph.
+ * @private
+ * Adds the range selector to the graph.
  */
-DygraphRangeSelector.prototype.addToGraph = function(graphDiv, layout) {
-  this.layout_ = layout;
-  this.resize_();
+rangeSelector.prototype.addToGraph_ = function() {
+  var graphDiv = this.graphDiv_ = this.dygraph_.graphDiv;
   graphDiv.appendChild(this.bgcanvas_);
   graphDiv.appendChild(this.fgcanvas_);
   graphDiv.appendChild(this.leftZoomHandle_);
@@ -47,18 +95,46 @@ DygraphRangeSelector.prototype.addToGraph = function(graphDiv, layout) {
 };
 
 /**
- * Renders the static background portion of the range selector.
+ * @private
+ * Removes the range selector from the graph.
  */
-DygraphRangeSelector.prototype.renderStaticLayer = function() {
+rangeSelector.prototype.removeFromGraph_ = function() {
+  var graphDiv = this.graphDiv_;
+  graphDiv.removeChild(this.bgcanvas_);
+  graphDiv.removeChild(this.fgcanvas_);
+  graphDiv.removeChild(this.leftZoomHandle_);
+  graphDiv.removeChild(this.rightZoomHandle_);
+  this.graphDiv_ = null;
+};
+
+/**
+ * @private
+ * Called by Layout to allow range selector to reserve its space.
+ */
+rangeSelector.prototype.reserveSpace_ = function(e) {
+  if (this.getOption_('showRangeSelector')) {
+    e.reserveSpaceBottom(this.getOption_('rangeSelectorHeight') + 4);
+  }
+};
+
+/**
+ * @private
+ * Renders the static portion of the range selector at the predraw stage.
+ */
+rangeSelector.prototype.renderStaticLayer_ = function() {
+  if (!this.updateVisibility_()) {
+    return;
+  }
   this.resize_();
   this.drawStaticLayer_();
 };
 
 /**
- * Renders the interactive foreground portion of the range selector.
+ * @private
+ * Renders the interactive portion of the range selector after the chart has been drawn.
  */
-DygraphRangeSelector.prototype.renderInteractiveLayer = function() {
-  if (this.isChangingRange_) {
+rangeSelector.prototype.renderInteractiveLayer_ = function() {
+  if (!this.updateVisibility_() || this.isChangingRange_) {
     return;
   }
   this.placeZoomHandles_();
@@ -67,9 +143,29 @@ DygraphRangeSelector.prototype.renderInteractiveLayer = function() {
 
 /**
  * @private
+ * Check to see if the range selector is enabled/disabled and update visibility accordingly.
+ */
+rangeSelector.prototype.updateVisibility_ = function() {
+  var enabled = this.getOption_('showRangeSelector');
+  if (enabled) {
+    if (!this.interfaceCreated_) {
+      this.createInterface_();
+    } else if (!this.graphDiv_ || !this.graphDiv_.parentNode) {
+      this.addToGraph_();
+    }
+  } else if (this.graphDiv_) {
+    this.removeFromGraph_();
+    var dygraph = this.dygraph_;
+    setTimeout(function() { dygraph.width_ = 0; dygraph.resize(); }, 1);
+  }
+  return enabled;
+};
+
+/**
+ * @private
  * Resizes the range selector.
  */
-DygraphRangeSelector.prototype.resize_ = function() {
+rangeSelector.prototype.resize_ = function() {
   function setElementRect(canvas, rect) {
     canvas.style.top = rect.y + 'px';
     canvas.style.left = rect.x + 'px';
@@ -79,28 +175,28 @@ DygraphRangeSelector.prototype.resize_ = function() {
     canvas.style.height = canvas.height + 'px';  // for IE
   }
 
-  var plotArea = this.layout_.getPlotArea();
-  var xAxisLabelHeight = this.attr_('xAxisHeight') || (this.attr_('axisLabelFontSize') + 2 * this.attr_('axisTickSize'));
+  var plotArea = this.dygraph_.layout_.getPlotArea();
+  
+  var xAxisLabelHeight = 0;
+  if(this.getOption_('drawXAxis')){
+    xAxisLabelHeight = this.getOption_('xAxisHeight') || (this.getOption_('axisLabelFontSize') + 2 * this.getOption_('axisTickSize'));
+  }
   this.canvasRect_ = {
     x: plotArea.x,
     y: plotArea.y + plotArea.h + xAxisLabelHeight + 4,
     w: plotArea.w,
-    h: this.attr_('rangeSelectorHeight')
+    h: this.getOption_('rangeSelectorHeight')
   };
 
   setElementRect(this.bgcanvas_, this.canvasRect_);
   setElementRect(this.fgcanvas_, this.canvasRect_);
 };
 
-DygraphRangeSelector.prototype.attr_ = function(name) {
-  return this.dygraph_.attr_(name);
-};
-
 /**
  * @private
  * Creates the background and foreground canvases.
  */
-DygraphRangeSelector.prototype.createCanvases_ = function() {
+rangeSelector.prototype.createCanvases_ = function() {
   this.bgcanvas_ = Dygraph.createCanvas();
   this.bgcanvas_.className = 'dygraph-rangesel-bgcanvas';
   this.bgcanvas_.style.position = 'absolute';
@@ -119,7 +215,7 @@ DygraphRangeSelector.prototype.createCanvases_ = function() {
  * @private
  * Creates overlay divs for IE/Excanvas so that mouse events are handled properly.
  */
-DygraphRangeSelector.prototype.createIEPanOverlay_ = function() {
+rangeSelector.prototype.createIEPanOverlay_ = function() {
   this.iePanOverlay_ = document.createElement("div");
   this.iePanOverlay_.style.position = 'absolute';
   this.iePanOverlay_.style.backgroundColor = 'white';
@@ -133,7 +229,7 @@ DygraphRangeSelector.prototype.createIEPanOverlay_ = function() {
  * @private
  * Creates the zoom handle elements.
  */
-DygraphRangeSelector.prototype.createZoomHandles_ = function() {
+rangeSelector.prototype.createZoomHandles_ = function() {
   var img = new Image();
   img.className = 'dygraph-rangesel-zoomhandle';
   img.style.position = 'absolute';
@@ -170,19 +266,23 @@ DygraphRangeSelector.prototype.createZoomHandles_ = function() {
  * @private
  * Sets up the interaction for the range selector.
  */
-DygraphRangeSelector.prototype.initInteraction_ = function() {
+rangeSelector.prototype.initInteraction_ = function() {
   var self = this;
   var topElem = this.isIE_ ? document : window;
-  var xLast = 0;
+  var clientXLast = 0;
   var handle = null;
   var isZooming = false;
   var isPanning = false;
   var dynamic = !this.isMobileDevice_ && !this.isUsingExcanvas_;
 
+  // We cover iframes during mouse interactions. See comments in
+  // dygraph-utils.js for more info on why this is a good idea.
+  var tarp = new Dygraph.IFrameTarp();
+
   // functions, defined below.  Defining them this way (rather than with
   // "function foo() {...}" makes JSHint happy.
   var toXDataWindow, onZoomStart, onZoom, onZoomEnd, doZoom, isMouseInPanZone,
-      onPanStart, onPan, onPanEnd, doPan, onCanvasMouseMove, applyBrowserZoomLevel;
+      onPanStart, onPan, onPanEnd, doPan, onCanvasHover;
 
   // Touch event functions
   var onZoomHandleTouchEvent, onCanvasTouchEvent, addTouchEvents;
@@ -195,23 +295,18 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
     return [xDataMin, xDataMax];
   };
 
-  applyBrowserZoomLevel = function(delX) {
-    var zoom = window.outerWidth/document.documentElement.clientWidth;
-    if (!isNaN(zoom)) {
-      return delX/zoom;
-    } else {
-      return delX;
-    }
-  };
-
   onZoomStart = function(e) {
     Dygraph.cancelEvent(e);
     isZooming = true;
-    xLast = e.screenX;
+    clientXLast = e.clientX;
     handle = e.target ? e.target : e.srcElement;
-    self.dygraph_.addEvent(topElem, 'mousemove', onZoom);
-    self.dygraph_.addEvent(topElem, 'mouseup', onZoomEnd);
+    if (e.type === 'mousedown' || e.type === 'dragstart') {
+      // These events are removed manually.
+      Dygraph.addEvent(topElem, 'mousemove', onZoom);
+      Dygraph.addEvent(topElem, 'mouseup', onZoomEnd);
+    }
     self.fgcanvas_.style.cursor = 'col-resize';
+    tarp.cover();
     return true;
   };
 
@@ -220,13 +315,12 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
       return false;
     }
     Dygraph.cancelEvent(e);
-    var delX = e.screenX - xLast;
-    if (Math.abs(delX) < 4 || e.screenX === 0) {
-      // First iPad move event seems to have screenX = 0
+
+    var delX = e.clientX - clientXLast;
+    if (Math.abs(delX) < 4) {
       return true;
     }
-    xLast = e.screenX;
-    delX = applyBrowserZoomLevel(delX);
+    clientXLast = e.clientX;
 
     // Move handle.
     var zoomHandleStatus = self.getZoomHandleStatus_();
@@ -256,6 +350,7 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
       return false;
     }
     isZooming = false;
+    tarp.uncover();
     Dygraph.removeEvent(topElem, 'mousemove', onZoom);
     Dygraph.removeEvent(topElem, 'mouseup', onZoomEnd);
     self.fgcanvas_.style.cursor = 'default';
@@ -272,7 +367,7 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
       var zoomHandleStatus = self.getZoomHandleStatus_();
       self.isChangingRange_ = true;
       if (!zoomHandleStatus.isZoomed) {
-        self.dygraph_.doUnzoom_();
+        self.dygraph_.resetZoom();
       } else {
         var xDataWindow = toXDataWindow(zoomHandleStatus);
         self.dygraph_.doZoomXDates_(xDataWindow[0], xDataWindow[1]);
@@ -298,9 +393,12 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
     if (!isPanning && isMouseInPanZone(e) && self.getZoomHandleStatus_().isZoomed) {
       Dygraph.cancelEvent(e);
       isPanning = true;
-      xLast = e.screenX;
-      self.dygraph_.addEvent(topElem, 'mousemove', onPan);
-      self.dygraph_.addEvent(topElem, 'mouseup', onPanEnd);
+      clientXLast = e.clientX;
+      if (e.type === 'mousedown') {
+        // These events are removed manually.
+        Dygraph.addEvent(topElem, 'mousemove', onPan);
+        Dygraph.addEvent(topElem, 'mouseup', onPanEnd);
+      }
       return true;
     }
     return false;
@@ -312,12 +410,11 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
     }
     Dygraph.cancelEvent(e);
 
-    var delX = e.screenX - xLast;
+    var delX = e.clientX - clientXLast;
     if (Math.abs(delX) < 4) {
       return true;
     }
-    xLast = e.screenX;
-    delX = applyBrowserZoomLevel(delX);
+    clientXLast = e.clientX;
 
     // Move range view
     var zoomHandleStatus = self.getZoomHandleStatus_();
@@ -370,7 +467,7 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
     }
   };
 
-  onCanvasMouseMove = function(e) {
+  onCanvasHover = function(e) {
     if (isZooming || isPanning) {
       return;
     }
@@ -415,9 +512,8 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
     }
   };
 
-  this.dygraph_.attrs_.interactionModel =
-      Dygraph.Interaction.dragIsPanInteractionModel;
-  this.dygraph_.attrs_.panEdgeFraction = 0.0001;
+  this.setDefaultOption_('interactionModel', Dygraph.Interaction.dragIsPanInteractionModel);
+  this.setDefaultOption_('panEdgeFraction', 0.0001);
 
   var dragStartEvent = window.opera ? 'mousedown' : 'dragstart';
   this.dygraph_.addEvent(this.leftZoomHandle_, dragStartEvent, onZoomStart);
@@ -427,7 +523,7 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
     this.dygraph_.addEvent(this.iePanOverlay_, 'mousedown', onPanStart);
   } else {
     this.dygraph_.addEvent(this.fgcanvas_, 'mousedown', onPanStart);
-    this.dygraph_.addEvent(this.fgcanvas_, 'mousemove', onCanvasMouseMove);
+    this.dygraph_.addEvent(this.fgcanvas_, 'mousemove', onCanvasHover);
   }
 
   // Touch events
@@ -442,7 +538,7 @@ DygraphRangeSelector.prototype.initInteraction_ = function() {
  * @private
  * Draws the static layer in the background canvas.
  */
-DygraphRangeSelector.prototype.drawStaticLayer_ = function() {
+rangeSelector.prototype.drawStaticLayer_ = function() {
   var ctx = this.bgcanvas_ctx_;
   ctx.clearRect(0, 0, this.canvasRect_.w, this.canvasRect_.h);
   try {
@@ -467,12 +563,14 @@ DygraphRangeSelector.prototype.drawStaticLayer_ = function() {
  * @private
  * Draws the mini plot in the background canvas.
  */
-DygraphRangeSelector.prototype.drawMiniPlot_ = function() {
-  var fillStyle = this.attr_('rangeSelectorPlotFillColor');
-  var strokeStyle = this.attr_('rangeSelectorPlotStrokeColor');
+rangeSelector.prototype.drawMiniPlot_ = function() {
+  var fillStyle = this.getOption_('rangeSelectorPlotFillColor');
+  var strokeStyle = this.getOption_('rangeSelectorPlotStrokeColor');
   if (!fillStyle && !strokeStyle) {
     return;
   }
+
+  var stepPlot = this.getOption_('stepPlot');
 
   var combinedSeriesData = this.computeCombinedSeriesAndLimits_();
   var yRange = combinedSeriesData.yMax - combinedSeriesData.yMin;
@@ -488,14 +586,36 @@ DygraphRangeSelector.prototype.drawMiniPlot_ = function() {
   var canvasWidth = this.canvasRect_.w - margin;
   var canvasHeight = this.canvasRect_.h - margin;
 
+  var prevX = null, prevY = null;
+
   ctx.beginPath();
   ctx.moveTo(margin, canvasHeight);
   for (var i = 0; i < combinedSeriesData.data.length; i++) {
     var dataPoint = combinedSeriesData.data[i];
-    var x = (dataPoint[0] - xExtremes[0])*xFact;
-    var y = canvasHeight - (dataPoint[1] - combinedSeriesData.yMin)*yFact;
+    var x = ((dataPoint[0] !== null) ? ((dataPoint[0] - xExtremes[0])*xFact) : NaN);
+    var y = ((dataPoint[1] !== null) ? (canvasHeight - (dataPoint[1] - combinedSeriesData.yMin)*yFact) : NaN);
     if (isFinite(x) && isFinite(y)) {
+      if(prevX === null) {
+        ctx.lineTo(x, canvasHeight);
+      }
+      else if (stepPlot) {
+        ctx.lineTo(x, prevY);
+      }
       ctx.lineTo(x, y);
+      prevX = x;
+      prevY = y;
+    }
+    else {
+      if(prevX !== null) {
+        if (stepPlot) {
+          ctx.lineTo(x, prevY);
+          ctx.lineTo(x, canvasHeight);
+        }
+        else {
+          ctx.lineTo(prevX, canvasHeight);
+        }
+      }
+      prevX = prevY = null;
     }
   }
   ctx.lineTo(canvasWidth, canvasHeight);
@@ -521,9 +641,9 @@ DygraphRangeSelector.prototype.drawMiniPlot_ = function() {
  * Computes and returns the combinded series data along with min/max for the mini plot.
  * @return {Object} An object containing combinded series array, ymin, ymax.
  */
-DygraphRangeSelector.prototype.computeCombinedSeriesAndLimits_ = function() {
+rangeSelector.prototype.computeCombinedSeriesAndLimits_ = function() {
   var data = this.dygraph_.rawData_;
-  var logscale = this.attr_('logscale');
+  var logscale = this.getOption_('logscale');
 
   // Create a combined series (average of all series values).
   var combinedSeries = [];
@@ -643,7 +763,7 @@ DygraphRangeSelector.prototype.computeCombinedSeriesAndLimits_ = function() {
  * @private
  * Places the zoom handles in the proper position based on the current X data window.
  */
-DygraphRangeSelector.prototype.placeZoomHandles_ = function() {
+rangeSelector.prototype.placeZoomHandles_ = function() {
   var xExtremes = this.dygraph_.xAxisExtremes();
   var xWindowLimits = this.dygraph_.xAxisRange();
   var xRange = xExtremes[1] - xExtremes[0];
@@ -666,7 +786,7 @@ DygraphRangeSelector.prototype.placeZoomHandles_ = function() {
  * @private
  * Draws the interactive layer in the foreground canvas.
  */
-DygraphRangeSelector.prototype.drawInteractiveLayer_ = function() {
+rangeSelector.prototype.drawInteractiveLayer_ = function() {
   var ctx = this.fgcanvas_ctx_;
   ctx.clearRect(0, 0, this.canvasRect_.w, this.canvasRect_.h);
   var margin = 1;
@@ -716,13 +836,17 @@ DygraphRangeSelector.prototype.drawInteractiveLayer_ = function() {
  * Returns the current zoom handle position information.
  * @return {Object} The zoom handle status.
  */
-DygraphRangeSelector.prototype.getZoomHandleStatus_ = function() {
+rangeSelector.prototype.getZoomHandleStatus_ = function() {
   var halfHandleWidth = this.leftZoomHandle_.width/2;
-  var leftHandlePos = parseInt(this.leftZoomHandle_.style.left, 10) + halfHandleWidth;
-  var rightHandlePos = parseInt(this.rightZoomHandle_.style.left, 10) + halfHandleWidth;
+  var leftHandlePos = parseFloat(this.leftZoomHandle_.style.left) + halfHandleWidth;
+  var rightHandlePos = parseFloat(this.rightZoomHandle_.style.left) + halfHandleWidth;
   return {
       leftHandlePos: leftHandlePos,
       rightHandlePos: rightHandlePos,
       isZoomed: (leftHandlePos - 1 > this.canvasRect_.x || rightHandlePos + 1 < this.canvasRect_.x+this.canvasRect_.w)
   };
 };
+
+return rangeSelector;
+
+})();

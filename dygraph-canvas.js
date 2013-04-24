@@ -25,7 +25,7 @@
  */
 
 /*jshint globalstrict: true */
-/*global Dygraph:false,RGBColor:false */
+/*global Dygraph:false,RGBColorParser:false */
 "use strict";
 
 
@@ -39,8 +39,8 @@
  * The chart canvas has already been created by the Dygraph object. The
  * renderer simply gets a drawing context.
  *
- * @param {Dyraph} dygraph The chart to which this renderer belongs.
- * @param {Canvas} element The &lt;canvas&gt; DOM element on which to draw.
+ * @param {Dygraph} dygraph The chart to which this renderer belongs.
+ * @param {HTMLCanvasElement} element The &lt;canvas&gt; DOM element on which to draw.
  * @param {CanvasRenderingContext2D} elementContext The drawing context.
  * @param {DygraphLayout} layout The chart's DygraphLayout object.
  *
@@ -58,6 +58,7 @@ var DygraphCanvasRenderer = function(dygraph, element, elementContext, layout) {
   this.width = this.element.width;
 
   // --- check whether everything is ok before we return
+  // NOTE(konigsberg): isIE is never defined in this object. Bug of some sort.
   if (!this.isIE && !(DygraphCanvasRenderer.isSupported(this.element)))
       throw "Canvas is not supported.";
 
@@ -261,7 +262,8 @@ DygraphCanvasRenderer._drawStyledLine = function(e,
     drawPointCallback, pointSize) {
   var g = e.dygraph;
   // TODO(konigsberg): Compute attributes outside this method call.
-  var stepPlot = g.getOption("stepPlot");  // TODO(danvk): per-series
+  var stepPlot = g.getOption("stepPlot", e.setName);
+
   if (!Dygraph.isArrayLike(strokePattern)) {
     strokePattern = null;
   }
@@ -343,7 +345,7 @@ DygraphCanvasRenderer._drawSeries = function(e,
       isIsolated = false;
       if (drawGapPoints || !prevCanvasX) {
         iter.nextIdx_ = i;
-        var peek = iter.next();
+        iter.next();
         nextCanvasY = iter.hasNext ? iter.peek.canvasy : null;
 
         var isNextCanvasYNullOrNaN = nextCanvasY === null ||
@@ -364,16 +366,15 @@ DygraphCanvasRenderer._drawSeries = function(e,
           if (stepPlot) {
             ctx.moveTo(prevCanvasX, prevCanvasY);
             ctx.lineTo(point.canvasx, prevCanvasY);
-            prevCanvasX = point.canvasx;
           }
 
-          // TODO(danvk): this moveTo is rarely necessary
-          ctx.moveTo(prevCanvasX, prevCanvasY);
           ctx.lineTo(point.canvasx, point.canvasy);
         }
+      } else {
+        ctx.moveTo(point.canvasx, point.canvasy);
       }
       if (drawPoints || isIsolated) {
-        pointsOnLine.push([point.canvasx, point.canvasy]);
+        pointsOnLine.push([point.canvasx, point.canvasy, point.idx]);
       }
       prevCanvasX = point.canvasx;
       prevCanvasY = point.canvasy;
@@ -398,7 +399,7 @@ DygraphCanvasRenderer._drawPointsOnLine = function(
     var cb = pointsOnLine[idx];
     ctx.save();
     drawPointCallback(
-        e.dygraph, e.setName, ctx, cb[0], cb[1], color, pointSize);
+        e.dygraph, e.setName, ctx, cb[0], cb[1], color, pointSize, cb[2]);
     ctx.restore();
   }
 };
@@ -433,25 +434,24 @@ DygraphCanvasRenderer.prototype._updatePoints = function() {
 
 /**
  * Add canvas Actually draw the lines chart, including error bars.
- * If opt_seriesName is specified, only that series will be drawn.
- * (This is used for expedited redrawing with highlightSeriesOpts)
- * Lines are typically drawn in the non-interactive dygraph canvas. If opt_ctx
- * is specified, they can be drawn elsewhere.
  *
  * This function can only be called if DygraphLayout's points array has been
  * updated with canvas{x,y} attributes, i.e. by
  * DygraphCanvasRenderer._updatePoints.
+ *
+ * @param {string=} opt_seriesName when specified, only that series will
+ *     be drawn. (This is used for expedited redrawing with highlightSeriesOpts)
+ * @param {CanvasRenderingContext2D} opt_ctx when specified, the drawing
+ *     context.  However, lines are typically drawn on the object's
+ *     elementContext.
  * @private
  */
 DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName, opt_ctx) {
   var ctx = opt_ctx || this.elementContext;
-  var errorBars = this.attr_("errorBars") || this.attr_("customBars");
-  var fillGraph = this.attr_("fillGraph");
   var i;
 
   var sets = this.layout.points;
   var setNames = this.layout.setNames;
-  var setCount = setNames.length;
   var setName;
 
   this.colors = this.dygraph_.colorsMap_;
@@ -510,6 +510,7 @@ DygraphCanvasRenderer.prototype._renderLineChart = function(opt_seriesName, opt_
         plotArea: this.area,
         seriesIndex: j,
         seriesCount: sets.length,
+        singleSeriesName: opt_seriesName,
         allSeriesPoints: sets
       });
       ctx.restore();
@@ -583,20 +584,19 @@ DygraphCanvasRenderer._linePlotter = function(e) {
  */
 DygraphCanvasRenderer._errorPlotter = function(e) {
   var g = e.dygraph;
+  var setName = e.setName;
   var errorBars = g.getOption("errorBars") || g.getOption("customBars");
   if (!errorBars) return;
 
-  var fillGraph = g.getOption("fillGraph");
+  var fillGraph = g.getOption("fillGraph", setName);
   if (fillGraph) {
     g.warn("Can't use fillGraph option with error bars");
   }
 
-  var setName = e.setName;
   var ctx = e.drawingContext;
   var color = e.color;
   var fillAlpha = g.getOption('fillAlpha', setName);
-  var stepPlot = g.getOption('stepPlot');  // TODO(danvk): per-series
-  var axis = e.axis;
+  var stepPlot = g.getOption("stepPlot", setName);
   var points = e.points;
 
   var iter = Dygraph.createIterator(points, 0, points.length,
@@ -609,16 +609,23 @@ DygraphCanvasRenderer._errorPlotter = function(e) {
   var prevX = NaN;
   var prevY = NaN;
   var prevYs = [-1, -1];
-  var yscale = axis.yscale;
   // should be same color as the lines but only 15% opaque.
-  var rgb = new RGBColor(color);
+  var rgb = new RGBColorParser(color);
   var err_color =
       'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + fillAlpha + ')';
   ctx.fillStyle = err_color;
   ctx.beginPath();
+
+  var isNullUndefinedOrNaN = function(x) {
+    return (x === null ||
+            x === undefined ||
+            isNaN(x));
+  };
+
   while (iter.hasNext) {
     var point = iter.next();
-    if (!Dygraph.isOK(point.y)) {
+    if ((!stepPlot && isNullUndefinedOrNaN(point.y)) ||
+        (stepPlot && !isNaN(prevY) && isNullUndefinedOrNaN(prevY))) {
       prevX = NaN;
       continue;
     }
@@ -633,17 +640,15 @@ DygraphCanvasRenderer._errorPlotter = function(e) {
     newYs[1] = e.plotArea.h * newYs[1] + e.plotArea.y;
     if (!isNaN(prevX)) {
       if (stepPlot) {
-        ctx.moveTo(prevX, newYs[0]);
+        ctx.moveTo(prevX, prevYs[0]);
+        ctx.lineTo(point.canvasx, prevYs[0]);
+        ctx.lineTo(point.canvasx, prevYs[1]);
       } else {
         ctx.moveTo(prevX, prevYs[0]);
+        ctx.lineTo(point.canvasx, newYs[0]);
+        ctx.lineTo(point.canvasx, newYs[1]);
       }
-      ctx.lineTo(point.canvasx, newYs[0]);
-      ctx.lineTo(point.canvasx, newYs[1]);
-      if (stepPlot) {
-        ctx.lineTo(prevX, newYs[1]);
-      } else {
-        ctx.lineTo(prevX, prevYs[1]);
-      }
+      ctx.lineTo(prevX, prevYs[1]);
       ctx.closePath();
     }
     prevYs = newYs;
@@ -663,18 +668,15 @@ DygraphCanvasRenderer._errorPlotter = function(e) {
  * @private
  */
 DygraphCanvasRenderer._fillPlotter = function(e) {
-  var g = e.dygraph;
-  if (!g.getOption("fillGraph")) return;
+  // Skip if we're drawing a single series for interactive highlight overlay.
+  if (e.singleSeriesName) return;
 
   // We'll handle all the series at once, not one-by-one.
   if (e.seriesIndex !== 0) return;
 
-  var ctx = e.drawingContext;
-  var area = e.plotArea;
-  var sets = e.allSeriesPoints;
-  var setCount = sets.length;
-
+  var g = e.dygraph;
   var setNames = g.getLabels().slice(1);  // remove x-axis
+
   // getLabels() includes names for invisible series, which are not included in
   // allSeriesPoints. We remove those to make the two match.
   // TODO(danvk): provide a simpler way to get this information.
@@ -682,17 +684,34 @@ DygraphCanvasRenderer._fillPlotter = function(e) {
     if (!g.visibility()[i]) setNames.splice(i, 1);
   }
 
+  var anySeriesFilled = (function() {
+    for (var i = 0; i < setNames.length; i++) {
+      if (g.getOption("fillGraph", setNames[i])) return true;
+    }
+    return false;
+  })();
+
+  if (!anySeriesFilled) return;
+
+  var ctx = e.drawingContext;
+  var area = e.plotArea;
+  var sets = e.allSeriesPoints;
+  var setCount = sets.length;
+
   var fillAlpha = g.getOption('fillAlpha');
-  var stepPlot = g.getOption('stepPlot');
   var stackedGraph = g.getOption("stackedGraph");
   var colors = g.getColors();
 
   var baseline = {};  // for stacked graphs: baseline for filling
   var currBaseline;
+  var prevStepPlot;  // for different line drawing modes (line/step) per series
 
   // process sets in reverse order (needed for stacked graphs)
   for (var setIdx = setCount - 1; setIdx >= 0; setIdx--) {
     var setName = setNames[setIdx];
+    if (!g.getOption('fillGraph', setName)) continue;
+    
+    var stepPlot = g.getOption('stepPlot', setName);
     var color = colors[setIdx];
     var axis = g.axisPropertiesForSeries(setName);
     var axisY = 1.0 + axis.minyval * axis.yscale;
@@ -709,26 +728,33 @@ DygraphCanvasRenderer._fillPlotter = function(e) {
     var prevX = NaN;
     var prevYs = [-1, -1];
     var newYs;
-    var yscale = axis.yscale;
     // should be same color as the lines but only 15% opaque.
-    var rgb = new RGBColor(color);
+    var rgb = new RGBColorParser(color);
     var err_color =
         'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + fillAlpha + ')';
     ctx.fillStyle = err_color;
     ctx.beginPath();
-    while(iter.hasNext) {
+    var last_x, is_first = true;
+    while (iter.hasNext) {
       var point = iter.next();
       if (!Dygraph.isOK(point.y)) {
         prevX = NaN;
         continue;
       }
       if (stackedGraph) {
+        if (!is_first && last_x == point.xval) {
+          continue;
+        } else {
+          is_first = false;
+          last_x = point.xval;
+        }
+
         currBaseline = baseline[point.canvasx];
         var lastY;
         if (currBaseline === undefined) {
           lastY = axisY;
         } else {
-          if(stepPlot) {
+          if(prevStepPlot) {
             lastY = currBaseline[0];
           } else {
             lastY = currBaseline;
@@ -753,17 +779,18 @@ DygraphCanvasRenderer._fillPlotter = function(e) {
       }
       if (!isNaN(prevX)) {
         ctx.moveTo(prevX, prevYs[0]);
-
+        
+        // Move to top fill point
         if (stepPlot) {
           ctx.lineTo(point.canvasx, prevYs[0]);
-          if(currBaseline) {
-            // Draw to the bottom of the baseline
-            ctx.lineTo(point.canvasx, currBaseline[1]);
-          } else {
-            ctx.lineTo(point.canvasx, newYs[1]);
-          }
         } else {
           ctx.lineTo(point.canvasx, newYs[0]);
+        }
+        // Move to bottom fill point
+        if (prevStepPlot && currBaseline) {
+          // Draw to the bottom of the baseline
+          ctx.lineTo(point.canvasx, currBaseline[1]);
+        } else {
           ctx.lineTo(point.canvasx, newYs[1]);
         }
 
@@ -773,6 +800,7 @@ DygraphCanvasRenderer._fillPlotter = function(e) {
       prevYs = newYs;
       prevX = point.canvasx;
     }
+    prevStepPlot = stepPlot;
     ctx.fill();
   }
 };

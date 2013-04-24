@@ -6,11 +6,16 @@
  */
 var CustomBarsTestCase = TestCase("custom-bars");
 
+CustomBarsTestCase._origFunc = Dygraph.getContext;
 CustomBarsTestCase.prototype.setUp = function() {
   document.body.innerHTML = "<div id='graph'></div>";
+  Dygraph.getContext = function(canvas) {
+    return new Proxy(CustomBarsTestCase._origFunc(canvas));
+  }
 };
 
 CustomBarsTestCase.prototype.tearDown = function() {
+  Dygraph.getContext = CustomBarsTestCase._origFunc;
 };
 
 // This test used to reliably produce an infinite loop.
@@ -56,4 +61,93 @@ CustomBarsTestCase.prototype.testCustomBarsNoHang = function() {
     "35,,0;22437620;0\n";
   var graph = document.getElementById("graph");
   var g = new Dygraph(graph, data, opts);
+};
+
+// Regression test for http://code.google.com/p/dygraphs/issues/detail?id=201
+CustomBarsTestCase.prototype.testCustomBarsZero = function() {
+  var opts = {
+    customBars: true
+  };
+  var data = "X,Y1,Y2\n" +
+"1,1;2;3,0;0;0\n" +
+"2,2;3;4,0;0;0\n" +
+"3,1;3;5,0;0;0\n";
+
+  var graph = document.getElementById("graph");
+  var g = new Dygraph(graph, data, opts);
+
+  var range = g.yAxisRange();
+  assertTrue('y-axis must include 0', range[0] <= 0);
+  assertTrue('y-axis must include 5', range[1] >= 5);
+};
+
+// Regression test for http://code.google.com/p/dygraphs/issues/detail?id=229
+CustomBarsTestCase.prototype.testCustomBarsAtTop = function() {
+  var g = new Dygraph(document.getElementById("graph"),
+      [
+        [1, [10, 10, 100]],
+        [1, [10, 10, 100]],
+        [2, [15, 20, 110]],
+        [3, [10, 30, 100]],
+        [4, [15, 40, 110]],
+        [5, [10,120, 100]],
+        [6, [15, 50, 110]],
+        [7, [10, 70, 100]],
+        [8, [15, 90, 110]],
+        [9, [10, 50, 100]]
+      ], {
+        width: 500, height: 350,
+        customBars: true,
+        errorBars: true,
+        drawXGrid: false,
+        drawYGrid: false,
+        drawXAxis: false,
+        drawYAxis: false,
+        valueRange: [0, 120],
+        fillAlpha: 0.15,
+        colors: [ '#00FF00' ]
+      });
+
+  var sampler = new PixelSampler(g);
+  assertEquals([0, 255, 0, 38], sampler.colorAtCoordinate(5, 60));
+};
+
+// Tests that custom bars work with log scale.
+CustomBarsTestCase.prototype.testCustomBarsLogScale = function() {
+  var g = new Dygraph(document.getElementById("graph"),
+      [
+        [1, [10, 10, 100]],
+        [5, [15,120, 80]],
+        [9, [10, 50, 100]]
+      ], {
+        width: 500, height: 350,
+        customBars: true,
+        errorBars: true,
+        valueRange: [1, 120],
+        drawXGrid: false,
+        drawYGrid: false,
+        drawXAxis: false,
+        drawYAxis: false,
+        fillAlpha: 1.0,
+        logscale: true,
+        colors: [ '#00FF00' ]
+      });
+
+  // The following assertions describe the sides of the custom bars, which are
+  // drawn in two halves.
+  CanvasAssertions.assertConsecutiveLinesDrawn(
+      g.hidden_ctx_,
+      [[0, 13.329014086362069],
+       [247.5, 29.64240889852502],
+       [247.5, 152.02209814465604],
+       [0, 181.66450704318103]],
+      { fillStyle: "#00ff00" });
+
+  CanvasAssertions.assertConsecutiveLinesDrawn(
+      g.hidden_ctx_,
+      [[247.5, 29.64240889852502],
+       [495, 13.329014086362069],
+       [495, 181.66450704318103],
+       [247.5, 152.02209814465604]],
+      { fillStyle: "#00ff00" });
 };

@@ -18,19 +18,19 @@ if [ $# -gt 1 ]; then
   exit 1
 fi
 
+RETURN_VALUE=0
+
 if [ $# -eq 0 ]; then
-  files=$(ls dygraph*.js plugins/*.js | grep -v combined | grep -v dev.js)
+  files=$(ls dygraph*.js plugins/*.js | grep -v combined | grep -v dev.js| grep -v externs)
 else
   files=$1
 fi
-
-jshint_opts="shadow=false"
 
 if [ -e /System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Resources/jsc ]; then
   # use JSC (Safari/JavaScriptCore) to run JSHint -- much faster than Rhino.
   echo 'Running JSHint w/ JavaScriptCore (jsc)...'
   for file in $files; do
-    ./jshint/env/jsc.sh $file $jsc_opts
+    ./jshint/env/jsc.sh $file $jsc_opts || RETURN_VALUE=1
   done
 else
   # fall back to Rhino.
@@ -42,8 +42,11 @@ else
     if [[ ${ERRORS} -ne 0 ]]; then
       echo "[jshint] Error(s) in ${FILE}:"
       printf "%s\n" "${LINT_RESULT}"
+      RETURN_VALUE=1
     else
       echo "[jshint] ${FILE} passed!"
     fi
   done
 fi
+
+exit $RETURN_VALUE

@@ -18,7 +18,11 @@
 Dygraph.LOG_SCALE = 10;
 Dygraph.LN_TEN = Math.log(Dygraph.LOG_SCALE);
 
-/** @private */
+/**
+ * @private
+ * @param {number} x
+ * @return {number}
+ */
 Dygraph.log10 = function(x) {
   return Math.log(x) / Dygraph.LN_TEN;
 };
@@ -43,10 +47,10 @@ Dygraph.DASHED_LINE = [7, 3];
 Dygraph.DOT_DASH_LINE = [7, 2, 2, 2];
 
 /**
- * @private
  * Log an error on the JS console at the given severity.
- * @param { Integer } severity One of Dygraph.{DEBUG,INFO,WARNING,ERROR}
- * @param { String } The message to log.
+ * @param {number} severity One of Dygraph.{DEBUG,INFO,WARNING,ERROR}
+ * @param {string} message The message to log.
+ * @private
  */
 Dygraph.log = function(severity, message) {
   var st;
@@ -71,51 +75,77 @@ Dygraph.log = function(severity, message) {
     }
   }
 
-  if (typeof(console) != 'undefined') {
+  if (typeof(window.console) != 'undefined') {
+    // In older versions of Firefox, only console.log is defined.
+    var console = window.console;
+    var log = function(console, method, msg) {
+      if (method && typeof(method) == 'function') {
+        method.call(console, msg);
+      } else {
+        console.log(msg);
+      }
+    };
+
     switch (severity) {
       case Dygraph.DEBUG:
-        console.debug('dygraphs: ' + message);
+        log(console, console.debug, 'dygraphs: ' + message);
         break;
       case Dygraph.INFO:
-        console.info('dygraphs: ' + message);
+        log(console, console.info, 'dygraphs: ' + message);
         break;
       case Dygraph.WARNING:
-        console.warn('dygraphs: ' + message);
+        log(console, console.warn, 'dygraphs: ' + message);
         break;
       case Dygraph.ERROR:
-        console.error('dygraphs: ' + message);
+        log(console, console.error, 'dygraphs: ' + message);
         break;
     }
   }
 
   if (Dygraph.LOG_STACK_TRACES) {
-    console.log(st.join('\n'));
+    window.console.log(st.join('\n'));
   }
 };
 
-/** @private */
+/**
+ * @param {string} message
+ * @private
+ */
 Dygraph.info = function(message) {
   Dygraph.log(Dygraph.INFO, message);
 };
-/** @private */
+/**
+ * @param {string} message
+ * @private
+ */
 Dygraph.prototype.info = Dygraph.info;
 
-/** @private */
+/**
+ * @param {string} message
+ * @private
+ */
 Dygraph.warn = function(message) {
   Dygraph.log(Dygraph.WARNING, message);
 };
-/** @private */
+/**
+ * @param {string} message
+ * @private
+ */
 Dygraph.prototype.warn = Dygraph.warn;
 
-/** @private */
+/**
+ * @param {string} message
+ */
 Dygraph.error = function(message) {
   Dygraph.log(Dygraph.ERROR, message);
 };
-/** @private */
+/**
+ * @param {string} message
+ * @private
+ */
 Dygraph.prototype.error = Dygraph.error;
 
 /**
- * @private
  * Return the 2d context for a dygraph canvas.
  *
  * This method is only exposed for the sake of replacing the function in
@@ -126,19 +156,22 @@ Dygraph.prototype.error = Dygraph.error;
  *   var realContext = oldFunc(canvas);
  *   return new Proxy(realContext);
  * };
+ * @param {!HTMLCanvasElement} canvas
+ * @return {!CanvasRenderingContext2D}
+ * @private
  */
 Dygraph.getContext = function(canvas) {
-  return canvas.getContext("2d");
+  return /** @type{!CanvasRenderingContext2D}*/(canvas.getContext("2d"));
 };
 
 /**
- * @private
  * Add an event handler. This smooths a difference between IE and the rest of
  * the world.
- * @param { DOM element } elem The element to add the event to.
- * @param { String } type The type of the event, e.g. 'click' or 'mousemove'.
- * @param { Function } fn The function to call on the event. The function takes
- * one parameter: the event object.
+ * @param { !Element } elem The element to add the event to.
+ * @param { string } type The type of the event, e.g. 'click' or 'mousemove'.
+ * @param { function(Event):(boolean|undefined) } fn The function to call
+ *     on the event. The function takes one parameter: the event object.
+ * @private
  */
 Dygraph.addEvent = function addEvent(elem, type, fn) {
   if (elem.addEventListener) {
@@ -150,30 +183,30 @@ Dygraph.addEvent = function addEvent(elem, type, fn) {
 };
 
 /**
- * @private
  * Add an event handler. This event handler is kept until the graph is
  * destroyed with a call to graph.destroy().
  *
- * @param { DOM element } elem The element to add the event to.
- * @param { String } type The type of the event, e.g. 'click' or 'mousemove'.
- * @param { Function } fn The function to call on the event. The function takes
- * one parameter: the event object.
+ * @param { !Element } elem The element to add the event to.
+ * @param { string } type The type of the event, e.g. 'click' or 'mousemove'.
+ * @param { function(Event):(boolean|undefined) } fn The function to call
+ *     on the event. The function takes one parameter: the event object.
+ * @private
  */
-Dygraph.prototype.addEvent = function addEvent(elem, type, fn) {
+Dygraph.prototype.addEvent = function(elem, type, fn) {
   Dygraph.addEvent(elem, type, fn);
   this.registeredEvents_.push({ elem : elem, type : type, fn : fn });
 };
 
 /**
+ * Remove an event handler. This smooths a difference between IE and the rest
+ * of the world.
+ * @param {!Element} elem The element to add the event to.
+ * @param {string} type The type of the event, e.g. 'click' or 'mousemove'.
+ * @param {function(Event):(boolean|undefined)} fn The function to call
+ *     on the event. The function takes one parameter: the event object.
  * @private
- * Remove an event handler. This smooths a difference between IE and the rest of
- * the world.
- * @param { DOM element } elem The element to add the event to.
- * @param { String } type The type of the event, e.g. 'click' or 'mousemove'.
- * @param { Function } fn The function to call on the event. The function takes
- * one parameter: the event object.
  */
-Dygraph.removeEvent = function addEvent(elem, type, fn) {
+Dygraph.removeEvent = function(elem, type, fn) {
   if (elem.removeEventListener) {
     elem.removeEventListener(type, fn, false);
   } else {
@@ -188,12 +221,12 @@ Dygraph.removeEvent = function addEvent(elem, type, fn) {
 };
 
 /**
- * @private
  * Cancels further processing of an event. This is useful to prevent default
  * browser actions, e.g. highlighting text on a double-click.
  * Based on the article at
  * http://www.switchonthecode.com/tutorials/javascript-tutorial-the-scroll-wheel
- * @param { Event } e The event whose normal behavior should be canceled.
+ * @param { !Event } e The event whose normal behavior should be canceled.
+ * @private
  */
 Dygraph.cancelEvent = function(e) {
   e = e ? e : window.event;
@@ -213,10 +246,10 @@ Dygraph.cancelEvent = function(e) {
  * Convert hsv values to an rgb(r,g,b) string. Taken from MochiKit.Color. This
  * is used to generate default series colors which are evenly spaced on the
  * color wheel.
- * @param { Number } hue Range is 0.0-1.0.
- * @param { Number } saturation Range is 0.0-1.0.
- * @param { Number } value Range is 0.0-1.0.
- * @return { String } "rgb(r,g,b)" where r, g and b range from 0-255.
+ * @param { number } hue Range is 0.0-1.0.
+ * @param { number } saturation Range is 0.0-1.0.
+ * @param { number } value Range is 0.0-1.0.
+ * @return { string } "rgb(r,g,b)" where r, g and b range from 0-255.
  * @private
  */
 Dygraph.hsvToRGB = function (hue, saturation, value) {
@@ -257,6 +290,9 @@ Dygraph.hsvToRGB = function (hue, saturation, value) {
 /**
  * Find the x-coordinate of the supplied object relative to the left side
  * of the page.
+ * TODO(danvk): change obj type from Node -&gt; !Node
+ * @param {Node} obj
+ * @return {number}
  * @private
  */
 Dygraph.findPosX = function(obj) {
@@ -264,6 +300,12 @@ Dygraph.findPosX = function(obj) {
   if(obj.offsetParent) {
     var copyObj = obj;
     while(1) {
+      // NOTE: the if statement here is for IE8.
+      var borderLeft = "0";
+      if (window.getComputedStyle) {
+        borderLeft = window.getComputedStyle(copyObj, null).borderLeft || "0";
+      }
+      curleft += parseInt(borderLeft, 10) ;
       curleft += copyObj.offsetLeft;
       if(!copyObj.offsetParent) {
         break;
@@ -284,6 +326,10 @@ Dygraph.findPosX = function(obj) {
 /**
  * Find the y-coordinate of the supplied object relative to the top of the
  * page.
+ * TODO(danvk): change obj type from Node -&gt; !Node
+ * TODO(danvk): consolidate with findPosX and return an {x, y} object.
+ * @param {Node} obj
+ * @return {number}
  * @private
  */
 Dygraph.findPosY = function(obj) {
@@ -291,6 +337,12 @@ Dygraph.findPosY = function(obj) {
   if(obj.offsetParent) {
     var copyObj = obj;
     while(1) {
+      // NOTE: the if statement here is for IE8.
+      var borderTop = "0";
+      if (window.getComputedStyle) {
+        borderTop = window.getComputedStyle(copyObj, null).borderTop || "0";
+      }
+      curtop += parseInt(borderTop, 10) ;
       curtop += copyObj.offsetTop;
       if(!copyObj.offsetParent) {
         break;
@@ -309,16 +361,18 @@ Dygraph.findPosY = function(obj) {
 };
 
 /**
- * @private
  * Returns the x-coordinate of the event in a coordinate system where the
  * top-left corner of the page (not the window) is (0,0).
  * Taken from MochiKit.Signal
+ * @param {!Event} e
+ * @return {number}
+ * @private
  */
 Dygraph.pageX = function(e) {
   if (e.pageX) {
     return (!e.pageX || e.pageX < 0) ? 0 : e.pageX;
   } else {
-    var de = document;
+    var de = document.documentElement;
     var b = document.body;
     return e.clientX +
         (de.scrollLeft || b.scrollLeft) -
@@ -327,16 +381,18 @@ Dygraph.pageX = function(e) {
 };
 
 /**
- * @private
  * Returns the y-coordinate of the event in a coordinate system where the
  * top-left corner of the page (not the window) is (0,0).
  * Taken from MochiKit.Signal
+ * @param {!Event} e
+ * @return {number}
+ * @private
  */
 Dygraph.pageY = function(e) {
   if (e.pageY) {
     return (!e.pageY || e.pageY < 0) ? 0 : e.pageY;
   } else {
-    var de = document;
+    var de = document.documentElement;
     var b = document.body;
     return e.clientY +
         (de.scrollTop || b.scrollTop) -
@@ -345,25 +401,27 @@ Dygraph.pageY = function(e) {
 };
 
 /**
+ * This returns true unless the parameter is 0, null, undefined or NaN.
+ * TODO(danvk): rename this function to something like 'isNonZeroNan'.
+ *
+ * @param {number} x The number to consider.
+ * @return {boolean} Whether the number is zero or NaN.
  * @private
- * @param { Number } x The number to consider.
- * @return { Boolean } Whether the number is zero or NaN.
  */
-// TODO(danvk): rename this function to something like 'isNonZeroNan'.
-// TODO(danvk): determine when else this returns false (e.g. for undefined or null)
 Dygraph.isOK = function(x) {
-  return x && !isNaN(x);
+  return !!x && !isNaN(x);
 };
 
 /**
+ * @param { {x:?number,y:?number,yval:?number} } p The point to consider, valid
+ *     points are {x, y} objects
+ * @param { boolean } allowNaNY Treat point with y=NaN as valid
+ * @return { boolean } Whether the point has numeric x and y.
  * @private
- * @param { Object } p The point to consider, valid points are {x, y} objects
- * @param { Boolean } allowNaNY Treat point with y=NaN as valid
- * @return { Boolean } Whether the point has numeric x and y.
  */
 Dygraph.isValidPoint = function(p, allowNaNY) {
-  if (!p) return false; // null or undefined object
-  if (p.yval === null) return false; // missing point
+  if (!p) return false;  // null or undefined object
+  if (p.yval === null) return false;  // missing point
   if (p.x === null || p.x === undefined) return false;
   if (p.y === null || p.y === undefined) return false;
   if (isNaN(p.x) || (!allowNaNY && isNaN(p.y))) return false;
@@ -383,9 +441,9 @@ Dygraph.isValidPoint = function(p, allowNaNY) {
  * 10^-6, e.g. '0.00001' instead of '1e-5'. See tests/number-format.html for
  * output examples.
  *
- * @param {Number} x The number to format
- * @param {Number} opt_precision The precision to use, default 2.
- * @return {String} A string formatted like %g in printf.  The max generated
+ * @param {number} x The number to format
+ * @param {number=} opt_precision The precision to use, default 2.
+ * @return {string} A string formatted like %g in printf.  The max generated
  *                  string length should be precision + 6 (e.g 1.123e+300).
  */
 Dygraph.floatFormat = function(x, opt_precision) {
@@ -413,8 +471,10 @@ Dygraph.floatFormat = function(x, opt_precision) {
 };
 
 /**
- * @private
  * Converts '9' to '09' (useful for dates)
+ * @param {number} x
+ * @return {string}
+ * @private
  */
 Dygraph.zeropad = function(x) {
   if (x < 10) return "0" + x; else return "" + x;
@@ -422,8 +482,9 @@ Dygraph.zeropad = function(x) {
 
 /**
  * Return a string version of the hours, minutes and seconds portion of a date.
- * @param {Number} date The JavaScript date (ms since epoch)
- * @return {String} A time of the form "HH:MM:SS"
+ *
+ * @param {number} date The JavaScript date (ms since epoch)
+ * @return {string} A time of the form "HH:MM:SS"
  * @private
  */
 Dygraph.hmsString_ = function(date) {
@@ -440,9 +501,9 @@ Dygraph.hmsString_ = function(date) {
 
 /**
  * Round a number to the specified number of digits past the decimal point.
- * @param {Number} num The number to round
- * @param {Number} places The number of decimals to which to round
- * @return {Number} The rounded number
+ * @param {number} num The number to round
+ * @param {number} places The number of decimals to which to round
+ * @return {number} The rounded number
  * @private
  */
 Dygraph.round_ = function(num, places) {
@@ -451,16 +512,17 @@ Dygraph.round_ = function(num, places) {
 };
 
 /**
- * @private
  * Implementation of binary search over an array.
  * Currently does not work when val is outside the range of arry's values.
- * @param { Integer } val the value to search for
- * @param { Integer[] } arry is the value over which to search
- * @param { Integer } abs If abs > 0, find the lowest entry greater than val
- * If abs < 0, find the highest entry less than val.
- * if abs == 0, find the entry that equals val.
- * @param { Integer } [low] The first index in arry to consider (optional)
- * @param { Integer } [high] The last index in arry to consider (optional)
+ * @param {number} val the value to search for
+ * @param {Array.<number>} arry is the value over which to search
+ * @param {number} abs If abs > 0, find the lowest entry greater than val
+ *     If abs < 0, find the highest entry less than val.
+ *     If abs == 0, find the entry that equals val.
+ * @param {number=} low The first index in arry to consider (optional)
+ * @param {number=} high The last index in arry to consider (optional)
+ * @return {number} Index of the element, or -1 if it isn't found.
+ * @private
  */
 Dygraph.binarySearch = function(val, arry, abs, low, high) {
   if (low === null || low === undefined ||
@@ -479,12 +541,10 @@ Dygraph.binarySearch = function(val, arry, abs, low, high) {
   };
   var mid = parseInt((low + high) / 2, 10);
   var element = arry[mid];
+  var idx;
   if (element == val) {
     return mid;
-  }
-
-  var idx;
-  if (element > val) {
+  } else if (element > val) {
     if (abs > 0) {
       // Accept if element > val, but also if prior element < val.
       idx = mid - 1;
@@ -493,8 +553,7 @@ Dygraph.binarySearch = function(val, arry, abs, low, high) {
       }
     }
     return Dygraph.binarySearch(val, arry, abs, low, mid - 1);
-  }
-  if (element < val) {
+  } else if (element < val) {
     if (abs < 0) {
       // Accept if element < val, but also if prior element > val.
       idx = mid + 1;
@@ -504,15 +563,17 @@ Dygraph.binarySearch = function(val, arry, abs, low, high) {
     }
     return Dygraph.binarySearch(val, arry, abs, mid + 1, high);
   }
+  return -1;  // can't actually happen, but makes closure compiler happy
 };
 
 /**
- * @private
  * Parses a date, returning the number of milliseconds since epoch. This can be
  * passed in as an xValueParser in the Dygraph constructor.
  * TODO(danvk): enumerate formats that this understands.
- * @param {String} A date in YYYYMMDD format.
- * @return {Number} Milliseconds since epoch.
+ *
+ * @param {string} dateStr A date in a variety of possible string formats.
+ * @return {number} Milliseconds since epoch.
+ * @private
  */
 Dygraph.dateParser = function(dateStr) {
   var dateStrSlashed;
@@ -554,12 +615,12 @@ Dygraph.dateParser = function(dateStr) {
 };
 
 /**
- * @private
  * This is identical to JavaScript's built-in Date.parse() method, except that
  * it doesn't get replaced with an incompatible method by aggressive JS
  * libraries like MooTools or Joomla.
- * @param { String } str The date string, e.g. "2011/05/06"
- * @return { Integer } millis since epoch
+ * @param {string} str The date string, e.g. "2011/05/06"
+ * @return {number} millis since epoch
+ * @private
  */
 Dygraph.dateStrToMillis = function(str) {
   return new Date(str).getTime();
@@ -569,9 +630,11 @@ Dygraph.dateStrToMillis = function(str) {
 /**
  * Copies all the properties from o to self.
  *
- * @private
+ * @param {!Object} self
+ * @param {!Object} o
+ * @return {!Object}
  */
-Dygraph.update = function (self, o) {
+Dygraph.update = function(self, o) {
   if (typeof(o) != 'undefined' && o !== null) {
     for (var k in o) {
       if (o.hasOwnProperty(k)) {
@@ -585,6 +648,9 @@ Dygraph.update = function (self, o) {
 /**
  * Copies all the properties from o to self.
  *
+ * @param {!Object} self
+ * @param {!Object} o
+ * @return {!Object}
  * @private
  */
 Dygraph.updateDeep = function (self, o) {
@@ -621,9 +687,11 @@ Dygraph.updateDeep = function (self, o) {
 };
 
 /**
+ * @param {Object} o
+ * @return {boolean}
  * @private
  */
-Dygraph.isArrayLike = function (o) {
+Dygraph.isArrayLike = function(o) {
   var typ = typeof(o);
   if (
       (typ != 'object' && !(typ == 'function' &&
@@ -638,6 +706,8 @@ Dygraph.isArrayLike = function (o) {
 };
 
 /**
+ * @param {Object} o
+ * @return {boolean}
  * @private
  */
 Dygraph.isDateLike = function (o) {
@@ -650,6 +720,8 @@ Dygraph.isDateLike = function (o) {
 
 /**
  * Note: this only seems to work for arrays.
+ * @param {!Array} o
+ * @return {!Array}
  * @private
  */
 Dygraph.clone = function(o) {
@@ -666,30 +738,43 @@ Dygraph.clone = function(o) {
 };
 
 /**
- * @private
  * Create a new canvas element. This is more complex than a simple
  * document.createElement("canvas") because of IE and excanvas.
+ *
+ * @return {!HTMLCanvasElement}
+ * @private
  */
 Dygraph.createCanvas = function() {
   var canvas = document.createElement("canvas");
 
   var isIE = (/MSIE/.test(navigator.userAgent) && !window.opera);
   if (isIE && (typeof(G_vmlCanvasManager) != 'undefined')) {
-    canvas = G_vmlCanvasManager.initElement(canvas);
+    canvas = G_vmlCanvasManager.initElement(
+        /**@type{!HTMLCanvasElement}*/(canvas));
   }
 
   return canvas;
 };
 
 /**
- * @private
  * Checks whether the user is on an Android browser.
  * Android does not fully support the <canvas> tag, e.g. w/r/t/ clipping.
+ * @return {boolean}
+ * @private
  */
 Dygraph.isAndroid = function() {
   return (/Android/).test(navigator.userAgent);
 };
 
+
+/**
+ * TODO(danvk): use @template here when it's better supported for classes.
+ * @param {!Array} array
+ * @param {number} start
+ * @param {number} length
+ * @param {function(!Array,?):boolean=} predicate
+ * @constructor
+ */
 Dygraph.Iterator = function(array, start, length, predicate) {
   start = start || 0;
   length = length || array.length;
@@ -703,6 +788,9 @@ Dygraph.Iterator = function(array, start, length, predicate) {
   this.next(); // ignoring result.
 };
 
+/**
+ * @return {Object}
+ */
 Dygraph.Iterator.prototype.next = function() {
   if (!this.hasNext) {
     return null;
@@ -728,67 +816,99 @@ Dygraph.Iterator.prototype.next = function() {
 };
 
 /**
- * @private
- * Returns a new iterator over array, between indexes start and 
+ * Returns a new iterator over array, between indexes start and
  * start + length, and only returns entries that pass the accept function
  *
- * @param array the array to iterate over.
- * @param start the first index to iterate over, 0 if absent.
- * @param length the number of elements in the array to iterate over.
- * This, along with start, defines a slice of the array, and so length
- * doesn't imply the number of elements in the iterator when accept
- * doesn't always accept all values. array.length when absent.
- * @param predicate a function that takes parameters array and idx, which
- * returns true when the element should be returned. If omitted, all
- * elements are accepted.
+ * @param {!Array} array the array to iterate over.
+ * @param {number} start the first index to iterate over, 0 if absent.
+ * @param {number} length the number of elements in the array to iterate over.
+ *     This, along with start, defines a slice of the array, and so length
+ *     doesn't imply the number of elements in the iterator when accept doesn't
+ *     always accept all values. array.length when absent.
+ * @param {function(?):boolean=} opt_predicate a function that takes
+ *     parameters array and idx, which returns true when the element should be
+ *     returned.  If omitted, all elements are accepted.
+ * @private
  */
-Dygraph.createIterator = function(array, start, length, predicate) {
-  return new Dygraph.Iterator(array, start, length, predicate);
+Dygraph.createIterator = function(array, start, length, opt_predicate) {
+  return new Dygraph.Iterator(array, start, length, opt_predicate);
 };
 
+// Shim layer with setTimeout fallback.
+// From: http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+// Should be called with the window context:
+//   Dygraph.requestAnimFrame.call(window, function() {})
+Dygraph.requestAnimFrame = (function() {
+  return window.requestAnimationFrame       ||
+          window.webkitRequestAnimationFrame ||
+          window.mozRequestAnimationFrame    ||
+          window.oRequestAnimationFrame      ||
+          window.msRequestAnimationFrame     ||
+          function (callback) {
+            window.setTimeout(callback, 1000 / 60);
+          };
+})();
+
 /**
- * @private
- * Call a function N times at a given interval, then call a cleanup function
- * once. repeat_fn is called once immediately, then (times - 1) times
- * asynchronously. If times=1, then cleanup_fn() is also called synchronously.
- * @param repeat_fn {Function} Called repeatedly -- takes the number of calls
- * (from 0 to times-1) as an argument.
- * @param times {number} The number of times to call repeat_fn
- * @param every_ms {number} Milliseconds between calls
- * @param cleanup_fn {Function} A function to call after all repeat_fn calls.
+ * Call a function at most maxFrames times at an attempted interval of
+ * framePeriodInMillis, then call a cleanup function once. repeatFn is called
+ * once immediately, then at most (maxFrames - 1) times asynchronously. If
+ * maxFrames==1, then cleanup_fn() is also called synchronously.  This function
+ * is used to sequence animation.
+ * @param {function(number)} repeatFn Called repeatedly -- takes the frame
+ *     number (from 0 to maxFrames-1) as an argument.
+ * @param {number} maxFrames The max number of times to call repeatFn
+ * @param {number} framePeriodInMillis Max requested time between frames.
+ * @param {function()} cleanupFn A function to call after all repeatFn calls.
  * @private
  */
-Dygraph.repeatAndCleanup = function(repeat_fn, times, every_ms, cleanup_fn) {
-  var count = 0;
-  var start_time = new Date().getTime();
-  repeat_fn(count);
-  if (times == 1) {
-    cleanup_fn();
+Dygraph.repeatAndCleanup = function(repeatFn, maxFrames, framePeriodInMillis,
+    cleanupFn) {
+  var frameNumber = 0;
+  var previousFrameNumber;
+  var startTime = new Date().getTime();
+  repeatFn(frameNumber);
+  if (maxFrames == 1) {
+    cleanupFn();
     return;
   }
+  var maxFrameArg = maxFrames - 1;
 
   (function loop() {
-    if (count >= times) return;
-    var target_time = start_time + (1 + count) * every_ms;
-    setTimeout(function() {
-      count++;
-      repeat_fn(count);
-      if (count >= times - 1) {
-        cleanup_fn();
+    if (frameNumber >= maxFrames) return;
+    Dygraph.requestAnimFrame.call(window, function() {
+      // Determine which frame to draw based on the delay so far.  Will skip
+      // frames if necessary.
+      var currentTime = new Date().getTime();
+      var delayInMillis = currentTime - startTime;
+      previousFrameNumber = frameNumber;
+      frameNumber = Math.floor(delayInMillis / framePeriodInMillis);
+      var frameDelta = frameNumber - previousFrameNumber;
+      // If we predict that the subsequent repeatFn call will overshoot our
+      // total frame target, so our last call will cause a stutter, then jump to
+      // the last call immediately.  If we're going to cause a stutter, better
+      // to do it faster than slower.
+      var predictOvershootStutter = (frameNumber + frameDelta) > maxFrameArg;
+      if (predictOvershootStutter || (frameNumber >= maxFrameArg)) {
+        repeatFn(maxFrameArg);  // Ensure final call with maxFrameArg.
+        cleanupFn();
       } else {
+        if (frameDelta !== 0) {  // Don't call repeatFn with duplicate frames.
+          repeatFn(frameNumber);
+        }
         loop();
       }
-    }, target_time - new Date().getTime());
-    // TODO(danvk): adjust every_ms to produce evenly-timed function calls.
+    });
   })();
 };
 
 /**
- * @private
  * This function will scan the option list and determine if they
  * require us to recalculate the pixel positions of each point.
- * @param { List } a list of options to check.
- * @return { Boolean } true if the graph needs new points else false.
+ * @param {!Array.<string>} labels a list of options to check.
+ * @param {!Object} attrs
+ * @return {boolean} true if the graph needs new points else false.
+ * @private
  */
 Dygraph.isPixelChangingOptionList = function(labels, attrs) {
   // A whitelist of options that do not change pixel positions.
@@ -890,11 +1010,12 @@ Dygraph.isPixelChangingOptionList = function(labels, attrs) {
 
 /**
  * Compares two arrays to see if they are equal. If either parameter is not an
- * array it will return false. Does a shallow compare 
+ * array it will return false. Does a shallow compare
  * Dygraph.compareArrays([[1,2], [3, 4]], [[1,2], [3,4]]) === false.
- * @param array1 first array
- * @param array2 second array
- * @return True if both parameters are arrays, and contents are equal.
+ * @param {!Array.<T>} array1 first array
+ * @param {!Array.<T>} array2 second array
+ * @return {boolean} True if both parameters are arrays, and contents are equal.
+ * @template T
  */
 Dygraph.compareArrays = function(array1, array2) {
   if (!Dygraph.isArrayLike(array1) || !Dygraph.isArrayLike(array2)) {
@@ -912,29 +1033,29 @@ Dygraph.compareArrays = function(array1, array2) {
 };
 
 /**
- * ctx: the canvas context
- * sides: the number of sides in the shape.
- * radius: the radius of the image.
- * cx: center x coordate
- * cy: center y coordinate
- * rotationRadians: the shift of the initial angle, in radians.
- * delta: the angle shift for each line. If missing, creates a regular
- *   polygon.
+ * @param {!CanvasRenderingContext2D} ctx the canvas context
+ * @param {number} sides the number of sides in the shape.
+ * @param {number} radius the radius of the image.
+ * @param {number} cx center x coordate
+ * @param {number} cy center y coordinate
+ * @param {number=} rotationRadians the shift of the initial angle, in radians.
+ * @param {number=} delta the angle shift for each line. If missing, creates a
+ *     regular polygon.
+ * @private
  */
 Dygraph.regularShape_ = function(
     ctx, sides, radius, cx, cy, rotationRadians, delta) {
-  rotationRadians = rotationRadians ? rotationRadians : 0;
-  delta = delta ? delta : Math.PI * 2 / sides;
+  rotationRadians = rotationRadians || 0;
+  delta = delta || Math.PI * 2 / sides;
 
   ctx.beginPath();
-  var first = true;
   var initialAngle = rotationRadians;
   var angle = initialAngle;
 
   var computeCoordinates = function() {
     var x = cx + (Math.sin(angle) * radius);
     var y = cy + (-Math.cos(angle) * radius);
-    return [x, y]; 
+    return [x, y];
   };
 
   var initialCoordinates = computeCoordinates();
@@ -951,16 +1072,20 @@ Dygraph.regularShape_ = function(
   ctx.stroke();
 };
 
+/**
+ * TODO(danvk): be more specific on the return type.
+ * @param {number} sides
+ * @param {number=} rotationRadians
+ * @param {number=} delta
+ * @return {Function}
+ * @private
+ */
 Dygraph.shapeFunction_ = function(sides, rotationRadians, delta) {
   return function(g, name, ctx, cx, cy, color, radius) {
     ctx.strokeStyle = color;
     ctx.fillStyle = "white";
     Dygraph.regularShape_(ctx, sides, radius, cx, cy, rotationRadians, delta);
   };
-};
-
-Dygraph.DrawPolygon_ = function(sides, rotationRadians, ctx, cx, cy, color, radius, delta) {
-  new Dygraph.RegularShape_(sides, rotationRadians, delta).draw(ctx, cx, cy, radius);
 };
 
 Dygraph.Circles = {
@@ -1013,5 +1138,157 @@ Dygraph.Circles = {
     ctx.lineTo(cx - radius, cy + radius);
     ctx.closePath();
     ctx.stroke();
+  }
+};
+
+/**
+ * To create a "drag" interaction, you typically register a mousedown event
+ * handler on the element where the drag begins. In that handler, you register a
+ * mouseup handler on the window to determine when the mouse is released,
+ * wherever that release happens. This works well, except when the user releases
+ * the mouse over an off-domain iframe. In that case, the mouseup event is
+ * handled by the iframe and never bubbles up to the window handler.
+ *
+ * To deal with this issue, we cover iframes with high z-index divs to make sure
+ * they don't capture mouseup.
+ *
+ * Usage:
+ * element.addEventListener('mousedown', function() {
+ *   var tarper = new Dygraph.IFrameTarp();
+ *   tarper.cover();
+ *   var mouseUpHandler = function() {
+ *     ...
+ *     window.removeEventListener(mouseUpHandler);
+ *     tarper.uncover();
+ *   };
+ *   window.addEventListener('mouseup', mouseUpHandler);
+ * };
+ *
+ * @constructor
+ */
+Dygraph.IFrameTarp = function() {
+  /** @type {Array.<!HTMLDivElement>} */
+  this.tarps = [];
+};
+
+/**
+ * Find all the iframes in the document and cover them with high z-index
+ * transparent divs.
+ */
+Dygraph.IFrameTarp.prototype.cover = function() {
+  var iframes = document.getElementsByTagName("iframe");
+  for (var i = 0; i < iframes.length; i++) {
+    var iframe = iframes[i];
+    var x = Dygraph.findPosX(iframe),
+        y = Dygraph.findPosY(iframe),
+        width = iframe.offsetWidth,
+        height = iframe.offsetHeight;
+
+    var div = document.createElement("div");
+    div.style.position = "absolute";
+    div.style.left = x + 'px';
+    div.style.top = y + 'px';
+    div.style.width = width + 'px';
+    div.style.height = height + 'px';
+    div.style.zIndex = 999;
+    document.body.appendChild(div);
+    this.tarps.push(div);
+  }
+};
+
+/**
+ * Remove all the iframe covers. You should call this in a mouseup handler.
+ */
+Dygraph.IFrameTarp.prototype.uncover = function() {
+  for (var i = 0; i < this.tarps.length; i++) {
+    this.tarps[i].parentNode.removeChild(this.tarps[i]);
+  }
+  this.tarps = [];
+};
+
+/**
+ * Determine whether |data| is delimited by CR, CRLF, LF, LFCR.
+ * @param {string} data
+ * @return {?string} the delimiter that was detected (or null on failure).
+ */
+Dygraph.detectLineDelimiter = function(data) {
+  for (var i = 0; i < data.length; i++) {
+    var code = data.charAt(i);
+    if (code === '\r') {
+      // Might actually be "\r\n".
+      if (((i + 1) < data.length) && (data.charAt(i + 1) === '\n')) {
+        return '\r\n';
+      }
+      return code;
+    }
+    if (code === '\n') {
+      // Might actually be "\n\r".
+      if (((i + 1) < data.length) && (data.charAt(i + 1) === '\r')) {
+        return '\n\r';
+      }
+      return code;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Is one node contained by another?
+ * @param {Node} containee The contained node.
+ * @param {Node} container The container node.
+ * @return {boolean} Whether containee is inside (or equal to) container.
+ * @private
+ */
+Dygraph.isNodeContainedBy = function(containee, container) {
+  if (container === null || containee === null) {
+    return false;
+  }
+  var containeeNode = /** @type {Node} */ (containee);
+  while (containeeNode && containeeNode !== container) {
+    containeeNode = containeeNode.parentNode;
+  }
+  return (containeeNode === container);
+};
+
+
+// This masks some numeric issues in older versions of Firefox,
+// where 1.0/Math.pow(10,2) != Math.pow(10,-2).
+/** @type {function(number,number):number} */
+Dygraph.pow = function(base, exp) {
+  if (exp < 0) {
+    return 1.0 / Math.pow(base, -exp);
+  }
+  return Math.pow(base, exp);
+};
+
+// For Dygraph.setDateSameTZ, below.
+Dygraph.dateSetters = {
+  ms: Date.prototype.setMilliseconds,
+  s: Date.prototype.setSeconds,
+  m: Date.prototype.setMinutes,
+  h: Date.prototype.setHours
+};
+
+/**
+ * This is like calling d.setSeconds(), d.setMinutes(), etc, except that it
+ * adjusts for time zone changes to keep the date/time parts consistent.
+ *
+ * For example, d.getSeconds(), d.getMinutes() and d.getHours() will all be
+ * the same before/after you call setDateSameTZ(d, {ms: 0}). The same is not
+ * true if you call d.setMilliseconds(0).
+ *
+ * @type {function(!Date, Object.<number>)}
+ */
+Dygraph.setDateSameTZ = function(d, parts) {
+  var tz = d.getTimezoneOffset();
+  for (var k in parts) {
+    if (!parts.hasOwnProperty(k)) continue;
+    var setter = Dygraph.dateSetters[k];
+    if (!setter) throw "Invalid setter: " + k;
+    setter.call(d, parts[k]);
+    if (d.getTimezoneOffset() != tz) {
+      d.setTime(d.getTime() + (tz - d.getTimezoneOffset()) * 60 * 1000);
+    }
   }
 };

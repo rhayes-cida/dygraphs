@@ -8,12 +8,14 @@ var CallbackTestCase = TestCase("callback");
 
 CallbackTestCase.prototype.setUp = function() {
   document.body.innerHTML = "<div id='graph'></div><div id='selection'></div>";
+  this.xhr = XMLHttpRequest;
   this.styleSheet = document.createElement("style");
   this.styleSheet.type = "text/css";
   document.getElementsByTagName("head")[0].appendChild(this.styleSheet);
 };
 
 CallbackTestCase.prototype.tearDown = function() {
+  XMLHttpRequest = this.xhr;
 };
 
 var data = "X,a\,b,c\n" +
@@ -304,7 +306,7 @@ CallbackTestCase.prototype.testClosestPointCallbackCss2 = function() {
 /**
  * Closest-point highlighting with locked series.
  */
-CallbackTestCase.prototype.testClosestPointCallbackCss1 = function() {
+CallbackTestCase.prototype.testSetSelectionLocking = function() {
   var g = runClosestTest(false, 2, 4);
 
   // Default behavior, 'b' is closest
@@ -486,4 +488,201 @@ CallbackTestCase.prototype.testGapHighlight = function() {
   assertEquals(1, h_pts.length);
   assertEquals(8, h_pts[0].yval);
   assertEquals('A', h_pts[0].name);
+};
+
+CallbackTestCase.prototype.testFailedResponse = function() {
+
+  // Fake out the XMLHttpRequest so it doesn't do anything.
+  XMLHttpRequest = function () {};
+  XMLHttpRequest.prototype.open = function () {};
+  XMLHttpRequest.prototype.send = function () {};
+
+  var highlightCallback = function(e, x, pts, row) {
+    fail("should not reach here");
+  };
+
+  var graph = document.getElementById("graph");
+  graph.style.border = "2px solid black";
+  var g = new Dygraph(graph, "data.csv", { // fake name
+     width: 400,
+     height: 300,
+     highlightCallback : highlightCallback
+  });
+
+  DygraphOps.dispatchMouseOver_Point(g, 800, 800);
+  DygraphOps.dispatchMouseMove_Point(g, 100, 100);
+  DygraphOps.dispatchMouseMove_Point(g, 800, 800);
+
+  var oldOnerror = window.onerror;
+  var failed = false;
+  window.onerror = function() { failed = true; return false; }
+
+  DygraphOps.dispatchMouseOut_Point(g, 800, 800); // This call should not throw an exception.
+
+  assertFalse("exception thrown during mouseout", failed);
+};
+
+
+// Regression test for http://code.google.com/p/dygraphs/issues/detail?id=355 
+CallbackTestCase.prototype.testHighlightCallbackRow = function() {
+  var highlightRow;
+  var highlightCallback = function(e, x, pts, row) {
+    highlightRow = row;
+  };
+
+  var graph = document.getElementById("graph");
+  var g = new Dygraph(graph,
+    "X,Y,Z\n" +
+    "0,1,2\n" +  // 0
+    "1,2,3\n" +  // 100
+    "2,3,4\n" +  // 200
+    "3,4,5\n" +  // 300
+    "4,5,6\n",   // 400
+    { // fake name
+       width: 400,
+       height: 300,
+       highlightCallback : highlightCallback
+    });
+
+  // Mouse over each of the points
+  DygraphOps.dispatchMouseOver_Point(g, 0, 0);
+  DygraphOps.dispatchMouseMove_Point(g, 0, 0);
+  assertEquals(0, highlightRow);
+  DygraphOps.dispatchMouseMove_Point(g, 100, 0);
+  assertEquals(1, highlightRow);
+  DygraphOps.dispatchMouseMove_Point(g, 200, 0);
+  assertEquals(2, highlightRow);
+  DygraphOps.dispatchMouseMove_Point(g, 300, 0);
+  assertEquals(3, highlightRow);
+  DygraphOps.dispatchMouseMove_Point(g, 400, 0);
+  assertEquals(4, highlightRow);
+
+  // Now zoom and verify that the row numbers still refer to rows in the data
+  // array.
+  g.updateOptions({dateWindow: [2, 4]});
+  DygraphOps.dispatchMouseOver_Point(g, 0, 0);
+  DygraphOps.dispatchMouseMove_Point(g, 0, 0);
+  assertEquals(2, highlightRow);
+  assertEquals('2: Y: 3 Z: 4', Util.getLegend());
+};
+
+/**
+ * Test that underlay callback is called even when there are no series,
+ * and that the y axis ranges are not NaN.
+ */
+CallbackTestCase.prototype.underlayCallback_noSeries = function() {
+  var called = false;
+  var yMin, yMax;
+
+  var callback = function(canvas, area, g) {
+    called = true;
+    yMin = g.yAxisRange(0)[0];
+    yMax = g.yAxisRange(0)[1];
+  };
+
+  var graph = document.getElementById("graph");
+  var g = new Dygraph(graph, "\n", {
+      underlayCallback: callback
+    });
+
+  assertTrue(called);
+  assertFalse(isNaN(yMin));
+  assertFalse(isNaN(yMax));
+};
+
+/**
+ * Test that underlay callback receives the correct y-axis range.
+ */
+CallbackTestCase.prototype.underlayCallback_yAxisRange = function() {
+  var called = false;
+  var yMin, yMax;
+
+  var callback = function(canvas, area, g) {
+    yMin = g.yAxisRange(0)[0];
+    yMax = g.yAxisRange(0)[1];
+  };
+
+  var graph = document.getElementById("graph");
+  var g = new Dygraph(graph, "\n", {
+      valueRange: [0,10],
+      underlayCallback: callback
+    });
+
+  assertEquals(0, yMin);
+  assertEquals(10, yMax);
+};
+
+/**
+ * Test that drawPointCallback is called for isolated points and correct idx for the point is returned.
+ */
+CallbackTestCase.prototype.testDrawPointCallback_idx = function() {
+    var indices = [];
+
+    var g;
+    var callback = function(g, seriesName, canvasContext, cx, cy, color, pointSizeParam,idx) {
+        indices.push(idx);
+        Dygraph.Circles.DEFAULT.apply(this, arguments);
+    };
+
+    var graph = document.getElementById("graph");
+
+    var testdata = [[10, 2], [11, 3], [12, NaN], [13, 2], [14, NaN], [15, 3]];
+    var graphOpts = {
+        labels: ['X', 'Y'],
+        valueRange: [0, 4],
+        drawPoints : false,
+        drawPointCallback : callback,
+        pointSize : 8
+    };
+
+    // Test that correct idx for isolated points are passed to the callback.
+    g = new Dygraph(graph, testdata, graphOpts);
+    assertEquals(2, indices.length);
+    assertEquals([3, 5],indices);
+
+    // Test that correct indices for isolated points + gap points are passed to the callback when
+    // drawGapEdgePoints is set.  This should add one point at the right
+    // edge of the segment at x=11, but not at the graph edge at x=10.
+    indices = []; // Reset for new test
+    graphOpts.drawGapEdgePoints = true;
+    g = new Dygraph(graph, testdata, graphOpts);
+    assertEquals(3, indices.length);
+    assertEquals([1, 3, 5],indices);
+
+
+    //Test that correct indices are passed to the callback when zoomed in.
+    indices = []; // Reset for new test
+    graphOpts.dateWindow = [12.5,13.5]
+    graphOpts.drawPoints = true;
+    testdata = [[10, 2], [11, 3], [12, 4], [13, 2], [14, 5], [15, 3]];
+    g = new Dygraph(graph, testdata, graphOpts);
+    assertEquals(3, indices.length);
+    assertEquals([2, 3, 4],indices);
+};
+
+/**
+ * Test that the correct idx is returned for the point in the onHiglightCallback.
+  */
+CallbackTestCase.prototype.testDrawHighlightPointCallback_idx = function() {
+    var idxToCheck = null;
+
+    var drawHighlightPointCallback  = function(g, seriesName, canvasContext, cx, cy, color, pointSizeParam,idx) {
+        idxToCheck = idx;
+    };
+    var testdata = [[1, 2], [2, 3], [3, NaN], [4, 2], [5, NaN], [6, 3]];
+    var graph = document.getElementById("graph");
+    var g = new Dygraph(graph, testdata,
+        {
+            drawHighlightPointCallback : drawHighlightPointCallback
+        });
+
+    assertNull(idxToCheck);
+    DygraphOps.dispatchMouseMove(g, 3, 0);
+    // check that NaN point is not highlighted
+    assertNull(idxToCheck);
+    DygraphOps.dispatchMouseMove(g, 1, 2);
+    // check that correct index is returned
+    assertEquals(0,idxToCheck);
+    DygraphOps.dispatchMouseMove(g, 6, 3);
+    assertEquals(5,idxToCheck);
 };

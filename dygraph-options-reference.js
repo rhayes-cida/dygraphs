@@ -60,7 +60,8 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
       [ "cx" , "center x coordinate" ],
       [ "cy" , "center y coordinate" ],
       [ "color" , "series color" ],
-      [ "pointSize" , "the radius of the image." ]
+      [ "pointSize" , "the radius of the image." ],
+      [ "idx" , "the row-index of the point in the data."]
     ],
     "description": "Draw a custom item when drawPoints is enabled. Default is a small dot matching the series color. This method should constrain drawing to within pointSize pixels from (cx, cy).  Also see <a href='#drawHighlightPointCallback'>drawHighlightPointCallback</a>"
   },
@@ -129,7 +130,8 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
       [ "cx" , "center x coordinate" ],
       [ "cy" , "center y coordinate" ],
       [ "color" , "series color" ],
-      [ "pointSize" , "the radius of the image." ]
+      [ "pointSize" , "the radius of the image." ],
+      [ "idx" , "the row-index of the point in the data."]
     ],
     "description": "Draw a custom item when a point is highlighted.  Default is a small dot matching the series color. This method should constrain drawing to within pointSize pixels from (cx, cy) Also see <a href='#drawPointCallback'>drawPointCallback</a>"
   },
@@ -269,10 +271,10 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
   "underlayCallback": {
     "default": "null",
     "labels": ["Callbacks"],
-    "type": "function(canvas, area, dygraph)",
+    "type": "function(context, area, dygraph)",
     "parameters": [
-      [ "canvas" , "the canvas to draw on" ],
-      [ "area" , "" ],
+      [ "context" , "the canvas drawing context on which to draw" ],
+      [ "area" , "An object with {x,y,w,h} properties describing the drawing area." ],
       [ "dygraph" , "the reference graph" ]
     ],
     "description": "When set, this callback gets called before the chart is drawn. It details on how to use this."
@@ -396,7 +398,7 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
     "default": "false",
     "labels": ["Data Line display"],
     "type": "boolean",
-    "description": "Should the area underneath the graph be filled? This option is not compatible with error bars."
+    "description": "Should the area underneath the graph be filled? This option is not compatible with error bars. This may be set on a <a href='per-axis.html'>per-series</a> basis."
   },
   "highlightCircleSize": {
     "default": "3",
@@ -421,7 +423,7 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
     "labels": ["Axis display"],
     "type": "Array of two numbers",
     "example": "[10, 110]",
-    "description": "Explicitly set the vertical range of the graph to [low, high]. This may be set on a per-axis basis to define each y-axis separately."
+    "description": "Explicitly set the vertical range of the graph to [low, high]. This may be set on a per-axis basis to define each y-axis separately. If either limit is unspecified, it will be calculated automatically (e.g. [null, 30] to automatically calculate just the lower bound)"
   },
   "labelsDivWidth": {
     "default": "250",
@@ -469,7 +471,7 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
     "default": "false",
     "labels": ["Data Line display"],
     "type": "boolean",
-    "description": "When set, display the graph as a step plot instead of a line plot."
+    "description": "When set, display the graph as a step plot instead of a line plot. This option may either be set for the whole graph or for single series."
   },
   "labelsKMB": {
     "default": "false",
@@ -485,15 +487,27 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
   },
   "avoidMinZero": {
     "default": "false",
-    "labels": ["Axis display"],
+    "labels": ["Deprecated"],
     "type": "boolean",
-    "description": "When set, the heuristic that fixes the Y axis at zero for a data set with the minimum Y value of zero is disabled. \nThis is particularly useful for data sets that contain many zero values, especially for step plots which may otherwise have lines not visible running along the bottom axis."
+    "description": "Deprecated, please use yRangePad instead. When set, the heuristic that fixes the Y axis at zero for a data set with the minimum Y value of zero is disabled. \nThis is particularly useful for data sets that contain many zero values, especially for step plots which may otherwise have lines not visible running along the bottom axis."
   },
   "drawAxesAtZero": {
     "default": "false",
     "labels": ["Axis display"],
     "type": "boolean",
     "description": "When set, draw the X axis at the Y=0 position and the Y axis at the X=0 position if those positions are inside the graph's visible area. Otherwise, draw the axes at the bottom or left graph edge as usual."
+  },
+  "xRangePad": {
+    "default": "0",
+    "labels": ["Axis display"],
+    "type": "float",
+    "description": "Add the specified amount of extra space (in pixels) around the X-axis value range to ensure points at the edges remain visible."
+  },
+  "yRangePad": {
+    "default": "null",
+    "labels": ["Axis display"],
+    "type": "float",
+    "description": "If set, add the specified amount of extra space (in pixels) around the Y-axis value range to ensure points at the edges remain visible. If unset, use the traditional Y padding algorithm."
   },
   "xAxisLabelFormatter": {
     "default": "",
@@ -728,7 +742,7 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
     "default": "false",
     "labels": ["Interactive Elements"],
     "type": "boolean",
-    "description": "Show the range selector widget. This option can only be specified at Dygraph creation time."
+    "description": "Show or hide the range selector widget."
   },
   "rangeSelectorHeight": {
     "default": "40",
@@ -759,6 +773,18 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
     "labels": ["Data Line display"],
     "type": "array or function",
     "description": "A function (or array of functions) which plot each data series on the chart. TODO(danvk): more details! May be set per-series."
+  },
+  "series": {
+    "default": "null",
+    "labels": ["Series"],
+    "type": "Object",
+    "description": "Defines per-series options. Its keys match the y-axis label names, and the values are dictionaries themselves that contain options specific to that series. When this option is missing, it falls back on the old-style of per-series options comingled with global options."
+  },
+  "plugins": {
+    "default": "[]",
+    "labels": ["Configuration"],
+    "type": "Array<plugin>",
+    "description": "Defines per-graph plug-ins. Useful for per-graph customization"
   }
 }
 ;  // </JSON>
@@ -770,7 +796,7 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
 // Do a quick sanity check on the options reference.
 (function() {
   "use strict";
-  var warn = function(msg) { if (console) console.warn(msg); };
+  var warn = function(msg) { if (window.console) window.console.warn(msg); };
   var flds = ['type', 'default', 'description'];
   var valid_cats = [
    'Annotations',
@@ -787,9 +813,11 @@ Dygraph.OPTIONS_REFERENCE =  // <JSON>
    'Legend',
    'Overall display',
    'Rolling Averages',
+   'Series',
    'Value display/formatting',
    'Zooming',
    'Debugging',
+   'Configuration',
    'Deprecated'
   ];
   var i;

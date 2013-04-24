@@ -52,13 +52,20 @@ DygraphLayout.prototype.addDataset = function(setname, set_xy) {
   this.setNames.push(setname);
 };
 
+/**
+ * Returns the box which the chart should be drawn in. This is the canvas's
+ * box, less space needed for the axis and chart labels.
+ *
+ * @return {{x: number, y: number, w: number, h: number}}
+ */
 DygraphLayout.prototype.getPlotArea = function() {
-  return this.computePlotArea_();
+  return this.area_;
 };
 
 // Compute the box which the chart should be drawn in. This is the canvas's
 // box, less space needed for axis and chart labels.
-DygraphLayout.prototype.computePlotArea_ = function() {
+// NOTE: This should only be called by Dygraph.predraw_().
+DygraphLayout.prototype.computePlotArea = function() {
   var area = {
     // TODO(danvk): per-axis setting.
     x: 0,
@@ -119,12 +126,7 @@ DygraphLayout.prototype.computePlotArea_ = function() {
   };
   this.dygraph_.cascadeEvents_('layout', e);
 
-  // Add space for range selector, if needed.
-  if (this.attr_('showRangeSelector')) {
-    area.h -= this.attr_('rangeSelectorHeight') + 4;
-  }
-
-  return area;
+  this.area_ = area;
 };
 
 DygraphLayout.prototype.setAnnotations = function(ann) {
@@ -134,7 +136,7 @@ DygraphLayout.prototype.setAnnotations = function(ann) {
   var parse = this.attr_('xValueParser') || function(x) { return x; };
   for (var i = 0; i < ann.length; i++) {
     var a = {};
-    if (!ann[i].xval && !ann[i].x) {
+    if (!ann[i].xval && ann[i].x === undefined) {
       this.dygraph_.error("Annotations must have an 'x' property");
       return;
     }
@@ -172,24 +174,11 @@ DygraphLayout.prototype.evaluate = function() {
 };
 
 DygraphLayout.prototype._evaluateLimits = function() {
-  this.minxval = this.maxxval = null;
-  if (this.dateWindow_) {
-    this.minxval = this.dateWindow_[0];
-    this.maxxval = this.dateWindow_[1];
-  } else {
-    for (var setIdx = 0; setIdx < this.datasets.length; ++setIdx) {
-      var series = this.datasets[setIdx];
-      if (series.length > 1) {
-        var x1 = series[0][0];
-        if (!this.minxval || x1 < this.minxval) this.minxval = x1;
-
-        var x2 = series[series.length - 1][0];
-        if (!this.maxxval || x2 > this.maxxval) this.maxxval = x2;
-      }
-    }
-  }
-  this.xrange = this.maxxval - this.minxval;
-  this.xscale = (this.xrange !== 0 ? 1/this.xrange : 1.0);
+  var xlimits = this.dygraph_.xAxisRange();
+  this.minxval = xlimits[0];
+  this.maxxval = xlimits[1];
+  var xrange = xlimits[1] - xlimits[0];
+  this.xscale = (xrange !== 0 ? 1 / xrange : 1.0);
 
   for (var i = 0; i < this.yAxes_.length; i++) {
     var axis = this.yAxes_[i];
@@ -210,8 +199,8 @@ DygraphLayout.prototype._evaluateLimits = function() {
   }
 };
 
-DygraphLayout._calcYNormal = function(axis, value) {
-  if (axis.logscale) {
+DygraphLayout._calcYNormal = function(axis, value, logscale) {
+  if (logscale) {
     return 1.0 - ((Dygraph.log10(value) - Dygraph.log10(axis.minyval)) * axis.ylogscale);
   } else {
     return 1.0 - ((value - axis.minyval) * axis.yscale);
@@ -228,10 +217,16 @@ DygraphLayout.prototype._evaluateLineCharts = function() {
   // on chrome+linux, they are 6 times more expensive than iterating through the
   // points and drawing the lines. The brunt of the cost comes from allocating
   // the |point| structures.
+  var boundaryIdStart = 0;
+  if (this.dygraph_.boundaryIds_.length > 0) {
+    boundaryIdStart = this.dygraph_.boundaryIds_[this.dygraph_.boundaryIds_.length-1][0];
+  }
   for (var setIdx = 0; setIdx < this.datasets.length; setIdx++) {
     var dataset = this.datasets[setIdx];
     var setName = this.setNames[setIdx];
     var axis = this.dygraph_.axisPropertiesForSeries(setName);
+    // TODO (konigsberg): use optionsForAxis instead.
+    var logscale = this.dygraph_.attributes_.getForSeries("logscale", setName);
 
     // Preallocating the size of points reduces reallocations, and therefore,
     // calls to collect garbage.
@@ -245,7 +240,7 @@ DygraphLayout.prototype._evaluateLineCharts = function() {
       // Range from 0-1 where 0 represents left and 1 represents right.
       var xNormal = (xValue - this.minxval) * this.xscale;
       // Range from 0-1 where 0 represents top and 1 represents bottom
-      var yNormal = DygraphLayout._calcYNormal(axis, yValue);
+      var yNormal = DygraphLayout._calcYNormal(axis, yValue, logscale);
 
       // TODO(danvk): drop the point in this case, don't null it.
       // The nulls create complexity in DygraphCanvasRenderer._drawSeries.
@@ -257,7 +252,8 @@ DygraphLayout.prototype._evaluateLineCharts = function() {
         y: yNormal,
         xval: xValue,
         yval: yValue,
-        name: setName  // TODO(danvk): is this really necessary?
+        name: setName,  // TODO(danvk): is this really necessary?
+        idx: j + boundaryIdStart
       };
     }
 
@@ -322,6 +318,9 @@ DygraphLayout.prototype.evaluateWithError = function() {
     var dataset = this.datasets[setIdx];
     var setName = this.setNames[setIdx];
     var axis = this.dygraph_.axisPropertiesForSeries(setName);
+    // TODO (konigsberg): use optionsForAxis instead.
+    var logscale = this.dygraph_.attributes_.getForSeries("logscale", setName);
+
     for (j = 0; j < dataset.length; j++, i++) {
       var item = dataset[j];
       var xv = DygraphLayout.parseFloat_(item[0]);
@@ -334,8 +333,8 @@ DygraphLayout.prototype.evaluateWithError = function() {
 
         var yv_minus = yv - errorMinus;
         var yv_plus = yv + errorPlus;
-        points[j].y_top = DygraphLayout._calcYNormal(axis, yv_minus);
-        points[j].y_bottom = DygraphLayout._calcYNormal(axis, yv_plus);
+        points[j].y_top = DygraphLayout._calcYNormal(axis, yv_minus, logscale);
+        points[j].y_bottom = DygraphLayout._calcYNormal(axis, yv_plus, logscale);
       }
     }
   }
@@ -393,7 +392,7 @@ DygraphLayout.prototype.removeAllDatasets = function() {
 DygraphLayout.prototype.unstackPointAtIndex = function(setIdx, row) {
   var point = this.points[setIdx][row];
   // If the point is missing, no unstacking is necessary
-  if (!point.yval) {
+  if (!Dygraph.isValidPoint(point)) {
     return point;
   }
 
@@ -409,11 +408,14 @@ DygraphLayout.prototype.unstackPointAtIndex = function(setIdx, row) {
 
   // The unstacked yval is equal to the current yval minus the yval of the
   // next point at the same xval.
-  var points = this.points[setIdx];
-  for (var i = row + 1; i < points.length; i++) {
-    if ((points[i].xval == point.xval) && points[i].yval) {
-      unstackedPoint.yval -= points[i].yval;
-      break;
+  // We need to iterate over setIdx just in case some series have invalid values
+  // at current row
+  for(setIdx++; setIdx < this.points.length; setIdx++) {
+    var nextPoint = this.points[setIdx][row];
+    if (nextPoint.xval == point.xval &&  // should always be true?
+        Dygraph.isValidPoint(nextPoint)) {
+      unstackedPoint.yval -= nextPoint.yval;
+      break; // stop at first valid point
     }
   }
 

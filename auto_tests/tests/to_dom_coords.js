@@ -6,16 +6,16 @@
 
 var ToDomCoordsTestCase = TestCase("to-dom-coords");
 
-var _origFunc = Dygraph.getContext;
+ToDomCoordsTestCase._origFunc = Dygraph.getContext;
 ToDomCoordsTestCase.prototype.setUp = function() {
   document.body.innerHTML = "<div id='graph'></div>";
   Dygraph.getContext = function(canvas) {
-    return new Proxy(_origFunc(canvas));
+    return new Proxy(ToDomCoordsTestCase._origFunc(canvas));
   }
 };
 
 ToDomCoordsTestCase.prototype.tearDown = function() {
-  Dygraph.getContext = _origFunc;
+  Dygraph.getContext = ToDomCoordsTestCase._origFunc;
 };
 
 // Checks that toDomCoords and toDataCoords are inverses of one another.
@@ -120,4 +120,48 @@ ToDomCoordsTestCase.prototype.testChartWithAxesAndLabels = function() {
   assertEquals([100, 0], g.toDataCoords(500, 425));
 
   this.checkForInverses(g);
+}
+
+ToDomCoordsTestCase.prototype.testYAxisLabelWidth = function() {
+  var opts = {
+    yAxisLabelWidth: 100,
+    axisTickSize: 0,
+    rightGap: 0,
+    valueRange: [0, 100],
+    dateWindow: [0, 100],
+    width: 500,
+    height: 500
+  }
+
+  var graph = document.getElementById("graph");
+  g = new Dygraph(graph, [ [0,0], [100,100] ], opts);
+
+  assertEquals([100, 0], g.toDomCoords(0, 100));
+  assertEquals([500, 486], g.toDomCoords(100, 0));
+
+  g.updateOptions({ yAxisLabelWidth: 50 });
+  assertEquals([50, 0], g.toDomCoords(0, 100));
+  assertEquals([500, 486], g.toDomCoords(100, 0));
+}
+
+ToDomCoordsTestCase.prototype.testAxisTickSize = function() {
+  var opts = {
+    yAxisLabelWidth: 100,
+    axisTickSize: 0,
+    rightGap: 0,
+    valueRange: [0, 100],
+    dateWindow: [0, 100],
+    width: 500,
+    height: 500
+  }
+
+  var graph = document.getElementById("graph");
+  g = new Dygraph(graph, [ [0,0], [100,100] ], opts);
+
+  assertEquals([100, 0], g.toDomCoords(0, 100));
+  assertEquals([500, 486], g.toDomCoords(100, 0));
+
+  g.updateOptions({ axisTickSize : 50 });
+  assertEquals([200, 0], g.toDomCoords(0, 100));
+  assertEquals([500, 386], g.toDomCoords(100, 0));
 }

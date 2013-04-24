@@ -3,6 +3,7 @@
  * Copyright 2012 Dan Vanderkam (danvdk@gmail.com)
  * MIT-licensed (http://opensource.org/licenses/MIT)
  */
+/*global Dygraph:false */
 
 Dygraph.Plugins.Legend = (function() {
 /*
@@ -182,14 +183,14 @@ legend.prototype.destroy = function() {
  * relevant when displaying a legend with no selection (i.e. {legend:
  * 'always'}) and with dashed lines.
  */
-var generateLegendHTML = function(g, x, sel_points, oneEmWidth) {
+generateLegendHTML = function(g, x, sel_points, oneEmWidth) {
   // TODO(danvk): deprecate this option in place of {legend: 'never'}
   if (g.getOption('showLabelsOnHighlight') !== true) return '';
 
   // If no points are selected, we display a default legend. Traditionally,
   // this has been blank. But a better default would be a conventional legend,
   // which provides essential information for a non-interactive chart.
-  var html, sepLines, i, c, dash, strokePattern;
+  var html, sepLines, i, dash, strokePattern;
   var labels = g.getLabels();
 
   if (typeof(x) === 'undefined') {
@@ -244,7 +245,7 @@ var generateLegendHTML = function(g, x, sel_points, oneEmWidth) {
 
     // TODO(danvk): use a template string here and make it an attribute.
     html += "<span" + cls + ">" + " <b><span style='color: " + series.color + ";'>" +
-        pt.name + "</span></b>:" + yval + "</span>";
+        pt.name + "</span></b>:&nbsp;" + yval + "</span>";
   }
   return html;
 };
@@ -261,7 +262,7 @@ var generateLegendHTML = function(g, x, sel_points, oneEmWidth) {
  * @param oneEmWidth The width in pixels of 1em in the legend.
  * @private
  */
-var generateLegendDashHTML = function(strokePattern, color, oneEmWidth) {
+generateLegendDashHTML = function(strokePattern, color, oneEmWidth) {
   // IE 7,8 fail at these divs, so they get boring legend, have not tested 9.
   var isIE = (/MSIE/.test(navigator.userAgent) && !window.opera);
   if (isIE) return "&mdash;";
